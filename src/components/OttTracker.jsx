@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Calendar, Film, Tv, Star, Bookmark, ExternalLink, Play, Search } from 'lucide-react';
+import { fetch91Mobiles } from '../utils/api';
 
 export default function OttTracker({ 
   shows = [], 
@@ -12,6 +13,7 @@ export default function OttTracker({
   
   // Scraper & Import Modal States
   const [isScanning, setIsScanning] = useState(false);
+  const [scanProgressText, setScanProgressText] = useState('');
   const [scrapedShows, setScrapedShows] = useState([]);
   const [showScrapeModal, setShowScrapeModal] = useState(false);
   const [scrapeError, setScrapeError] = useState('');
@@ -110,14 +112,17 @@ export default function OttTracker({
   // Scraper Actions
   const handleScanWeeklyReleases = async () => {
     setIsScanning(true);
+    setScanProgressText('Connecting...');
     setScrapeError('');
     setScrapedShows([]);
     try {
-      const res = await fetch('/api/scrape-91mobiles');
-      if (!res.ok) {
-        throw new Error('Failed to fetch weekly releases from backend.');
-      }
-      const data = await res.json();
+      const data = await fetch91Mobiles((current, total, title) => {
+        if (total === 0) {
+          setScanProgressText(title);
+        } else {
+          setScanProgressText(`Resolving (${current}/${total}): ${title}`);
+        }
+      });
       if (data.shows && data.shows.length > 0) {
         setScrapedShows(data.shows);
         setShowAllLanguages(false);
@@ -144,10 +149,11 @@ export default function OttTracker({
       }
     } catch (err) {
       console.error(err);
-      setScrapeError('Error scanning weekly releases. Make sure dev server sidecar is running.');
-      alert('Error scanning weekly releases. Make sure your server sidecar is active.');
+      setScrapeError('Error scanning weekly releases. Make sure Python virtual environment is set up.');
+      alert(`Error scanning weekly releases: ${err.message}`);
     } finally {
       setIsScanning(false);
+      setScanProgressText('');
     }
   };
 
@@ -197,7 +203,7 @@ export default function OttTracker({
             className="btn btn-primary"
             style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap' }}
           >
-            {isScanning ? 'Scanning...' : 'Scan Weekly Releases ⚡'}
+            {isScanning ? (scanProgressText || 'Scanning...') : 'Scan Weekly Releases ⚡'}
           </button>
           
           <div style={{ position: 'relative' }}>

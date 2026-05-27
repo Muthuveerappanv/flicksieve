@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Compass, RotateCw, Calendar, Bookmark, Settings as SettingsIcon, Star, Filter, Heart, Search as SearchIcon } from 'lucide-react';
+import { Compass, RotateCw, Calendar, Bookmark, Settings as SettingsIcon, Star, Filter, Heart, Search as SearchIcon, X } from 'lucide-react';
 import { initialShows, initialReviewers } from './data/shows';
+import { fetchLetterboxd, fetchRottenTomatoes } from './utils/api';
 import ShowCard from './components/ShowCard';
 import DeciderWheel from './components/DeciderWheel';
 import OttTracker from './components/OttTracker';
@@ -106,6 +107,9 @@ export default function App() {
   // Add Title Modal State
   const [showAddTitleModal, setShowAddTitleModal] = useState(false);
 
+  // Delete Title Modal State
+  const [showToDelete, setShowToDelete] = useState(null);
+
   // --- PERSISTENCE ---
   useEffect(() => {
     localStorage.setItem('flicksieve_shows', JSON.stringify(shows));
@@ -193,12 +197,15 @@ export default function App() {
   const handleDeleteShow = (showId) => {
     const show = shows.find(s => s.id === showId);
     if (!show) return;
+    setShowToDelete(show);
+  };
 
-    if (window.confirm(`Are you sure you want to delete "${show.title}" from the database?`)) {
-      setShows(prev => prev.filter(s => s.id !== showId));
-      setWatchlist(prev => prev.filter(item => item.id !== showId));
-      triggerToast(`Deleted "${show.title}" from the database.`, 'success');
-    }
+  const handleConfirmDelete = () => {
+    if (!showToDelete) return;
+    setShows(prev => prev.filter(s => s.id !== showToDelete.id));
+    setWatchlist(prev => prev.filter(item => item.id !== showToDelete.id));
+    triggerToast(`Deleted "${showToDelete.title}" from the database.`, 'success');
+    setShowToDelete(null);
   };
 
   const handleRefreshShowRatings = async (showId, triggerNotification = true) => {
@@ -269,18 +276,13 @@ export default function App() {
 
       // 2. Fetch Letterboxd rating
       try {
-        const yearParam = currentYear ? `&year=${currentYear}` : '';
-        const imdbParam = currentImdbId ? `&imdb_id=${currentImdbId}` : '';
-        const lbRes = await fetch(`/api/letterboxd?query=${encodeURIComponent(show.title)}` + yearParam + imdbParam);
-        if (lbRes.ok) {
-          const lbData = await lbRes.json();
-          if (lbData && !lbData.error) {
-            if (lbData.rating) {
-              updatedRatings.letterboxd = parseFloat(lbData.rating);
-            }
-            if (lbData.slug) {
-              currentSlug = lbData.slug;
-            }
+        const lbData = await fetchLetterboxd(show.title, currentYear, currentImdbId);
+        if (lbData && !lbData.error) {
+          if (lbData.rating) {
+            updatedRatings.letterboxd = parseFloat(lbData.rating);
+          }
+          if (lbData.slug) {
+            currentSlug = lbData.slug;
           }
         }
       } catch (err) {
@@ -289,21 +291,16 @@ export default function App() {
 
       // 2.5 Fetch Rotten Tomatoes rating
       try {
-        const yearParam = currentYear ? `&year=${currentYear}` : '';
-        const isTvParam = `&is_tv=${show.type === 'tv' ? 'true' : 'false'}`;
-        const rtRes = await fetch(`/api/rottentomatoes?query=${encodeURIComponent(show.title)}` + yearParam + isTvParam);
-        if (rtRes.ok) {
-          const rtData = await rtRes.json();
-          if (rtData && !rtData.error) {
-            if (rtData.criticScore !== undefined && rtData.criticScore !== null) {
-              updatedRatings.rottenTomatoes = parseInt(rtData.criticScore, 10);
-            }
-            if (rtData.audienceScore !== undefined && rtData.audienceScore !== null) {
-              updatedRatings.rottenTomatoesAudience = parseInt(rtData.audienceScore, 10);
-            }
-            if (rtData.url) {
-              currentRtUrl = rtData.url;
-            }
+        const rtData = await fetchRottenTomatoes(show.title, currentYear, show.type === 'tv');
+        if (rtData && !rtData.error) {
+          if (rtData.criticScore !== undefined && rtData.criticScore !== null) {
+            updatedRatings.rottenTomatoes = parseInt(rtData.criticScore, 10);
+          }
+          if (rtData.audienceScore !== undefined && rtData.audienceScore !== null) {
+            updatedRatings.rottenTomatoesAudience = parseInt(rtData.audienceScore, 10);
+          }
+          if (rtData.url) {
+            currentRtUrl = rtData.url;
           }
         }
       } catch (err) {
@@ -449,16 +446,11 @@ export default function App() {
       let lbPoster = null;
 
       try {
-        const yearParam = currentYear ? `&year=${currentYear}` : '';
-        const imdbParam = currentImdbId ? `&imdb_id=${currentImdbId}` : '';
-        const lbRes = await fetch(`/api/letterboxd?query=${encodeURIComponent(importedShow.title)}` + yearParam + imdbParam);
-        if (lbRes.ok) {
-          const lbData = await lbRes.json();
-          if (lbData && !lbData.error) {
-            lbRating = lbData.rating ? parseFloat(lbData.rating) : null;
-            lbSlug = lbData.slug || null;
-            lbPoster = lbData.poster || null;
-          }
+        const lbData = await fetchLetterboxd(importedShow.title, currentYear, currentImdbId);
+        if (lbData && !lbData.error) {
+          lbRating = lbData.rating ? parseFloat(lbData.rating) : null;
+          lbSlug = lbData.slug || null;
+          lbPoster = lbData.poster || null;
         }
       } catch (err) {
         console.error(`Error background-resolving Letterboxd for ${importedShow.title}:`, err);
@@ -979,6 +971,37 @@ export default function App() {
         onClose={() => setShowAddTitleModal(false)}
         onAddShow={handleAddShow}
       />
+
+      {/* DELETE TITLE CONFIRMATION MODAL */}
+      {showToDelete && (
+        <div className="modal-overlay" onClick={() => setShowToDelete(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '450px' }}>
+            <div className="modal-header">
+              <h3>Confirm Deletion</h3>
+              <button className="modal-close-btn" onClick={() => setShowToDelete(null)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p style={{ margin: '0 0 1.5rem 0', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                Are you sure you want to delete <strong style={{ color: 'white' }}>"{showToDelete.title}"</strong> from the database? This action cannot be undone.
+              </p>
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary" onClick={() => setShowToDelete(null)}>
+                  Cancel
+                </button>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={handleConfirmDelete}
+                  style={{ backgroundColor: '#ef4444', borderColor: '#ef4444', backgroundImage: 'none' }}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* TOAST SYSTEM */}
       <div className="toast-container">

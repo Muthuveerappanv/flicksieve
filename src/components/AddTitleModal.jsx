@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Film, Tv, Trash, Plus, Search, AlertTriangle, X } from 'lucide-react';
+import { fetchLetterboxd, fetchRottenTomatoes } from '../utils/api';
 
 export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
   // Add Movie / TV Series Form State
@@ -126,20 +127,16 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
 
     // 2. Fetch Letterboxd rating from local API
     try {
-      const yearParam = year ? `&year=${year}` : '';
-      const lbRes = await fetch(`/api/letterboxd?query=${encodeURIComponent(title)}` + yearParam + `&imdb_id=${result.id}`);
-      if (lbRes.ok) {
-        const lbData = await lbRes.json();
-        if (lbData && !lbData.error) {
-          if (lbData.rating) {
-            setRatingLboxd(lbData.rating.toString());
-          }
-          if (lbData.slug) {
-            setLetterboxdSlug(lbData.slug);
-          }
-          if (lbData.poster && !result.primaryImage?.url) {
-            setPosterUrl(lbData.poster);
-          }
+      const lbData = await fetchLetterboxd(title, year, result.id);
+      if (lbData && !lbData.error) {
+        if (lbData.rating) {
+          setRatingLboxd(lbData.rating.toString());
+        }
+        if (lbData.slug) {
+          setLetterboxdSlug(lbData.slug);
+        }
+        if (lbData.poster && !result.primaryImage?.url) {
+          setPosterUrl(lbData.poster);
         }
       }
     } catch (err) {
@@ -148,21 +145,16 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
 
     // 3. Fetch Rotten Tomatoes rating from local API
     try {
-      const yearParam = year ? `&year=${year}` : '';
-      const isTvParam = `&is_tv=${isTv ? 'true' : 'false'}`;
-      const rtRes = await fetch(`/api/rottentomatoes?query=${encodeURIComponent(title)}` + yearParam + isTvParam);
-      if (rtRes.ok) {
-        const rtData = await rtRes.json();
-        if (rtData && !rtData.error) {
-          if (rtData.criticScore !== undefined && rtData.criticScore !== null) {
-            setRatingRT(rtData.criticScore.toString());
-          }
-          if (rtData.audienceScore !== undefined && rtData.audienceScore !== null) {
-            setRatingRTAudience(rtData.audienceScore.toString());
-          }
-          if (rtData.url) {
-            setRottenTomatoesUrl(rtData.url);
-          }
+      const rtData = await fetchRottenTomatoes(title, year, isTv);
+      if (rtData && !rtData.error) {
+        if (rtData.criticScore !== undefined && rtData.criticScore !== null) {
+          setRatingRT(rtData.criticScore.toString());
+        }
+        if (rtData.audienceScore !== undefined && rtData.audienceScore !== null) {
+          setRatingRTAudience(rtData.audienceScore.toString());
+        }
+        if (rtData.url) {
+          setRottenTomatoesUrl(rtData.url);
         }
       }
     } catch (err) {

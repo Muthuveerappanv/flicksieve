@@ -14,10 +14,10 @@ exec('python3 -m venv .venv', { cwd: rootDir }, (err) => {
     return;
   }
   
-  console.log('⚡ Installing Python scraping dependencies (requests, beautifulsoup4, letterboxdpy)...');
+  console.log('⚡ Installing Python scraping dependencies (requests, beautifulsoup4, letterboxdpy, curl_cffi)...');
   const pipPath = process.platform === 'win32' ? '.venv\\Scripts\\pip' : '.venv/bin/pip';
   
-  exec(`"${pipPath}" install requests beautifulsoup4 letterboxdpy`, { cwd: rootDir }, (err, stdout, stderr) => {
+  exec(`"${pipPath}" install requests beautifulsoup4 letterboxdpy curl_cffi`, { cwd: rootDir }, (err, stdout, stderr) => {
     if (err) {
       console.warn('\n⚠️  [FlickSieve Warning]: Failed to install Python dependencies. Scrapers might fail.');
       console.warn(stderr || err.message);
