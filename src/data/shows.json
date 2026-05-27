@@ -1,0 +1,558 @@
+[
+  {
+    "id": "tam-1",
+    "title": "Maharaja",
+    "type": "movie",
+    "language": "Tamil",
+    "year": 2024,
+    "genres": [
+      "Action",
+      "Drama",
+      "Thriller"
+    ],
+    "overview": "A barber seeks vengeance after his home is burglarized, cryptically telling police his 'Lakshmi' has been stolen, leaving them confused about whether it's a person or an object.",
+    "ratings": {
+      "imdb": 8.3,
+      "rottenTomatoes": 100,
+      "letterboxd": 3.84
+    },
+    "platform": "Netflix",
+    "releaseDate": "2024-07-12",
+    "featured": true,
+    "youtubeTrailer": "https://www.youtube.com/watch?v=1F34p-YxP6U",
+    "imdbId": "tt26548265",
+    "posterUrl": "https://m.media-amazon.com/images/M/MV5BOTFlMTIxOGItZTk0Zi00MTk2LWJiM2UtMzlhZWYzNjQ4N2Y3XkEyXkFqcGc@._V1_.jpg",
+    "letterboxdSlug": "maharaja-2024"
+  },
+  {
+    "id": "tam-2",
+    "title": "Jigarthanda DoubleX",
+    "type": "movie",
+    "language": "Tamil",
+    "year": 2023,
+    "genres": [
+      "Comedy",
+      "Action",
+      "Drama"
+    ],
+    "overview": "In 1975 Tamil Nadu, a filmmaker tries to make a Western action film with a notorious gangster, leading to an artistic and violent clash.",
+    "ratings": {
+      "imdb": 8,
+      "rottenTomatoes": 90,
+      "letterboxd": 3.98
+    },
+    "platform": "Netflix",
+    "releaseDate": "2023-11-10",
+    "featured": false,
+    "youtubeTrailer": "https://www.youtube.com/watch?v=gSg4C5aKozk",
+    "imdbId": "tt24226474",
+    "posterUrl": "https://m.media-amazon.com/images/M/MV5BZDc5YWJmNDEtOTY3Mi00ZGY0LWJlNDQtMDhkM2VkNjMzMTVlXkEyXkFqcGc@._V1_.jpg",
+    "letterboxdSlug": "jigarthanda-doublex"
+  },
+  {
+    "id": "tam-3",
+    "title": "Vikram",
+    "type": "movie",
+    "language": "Tamil",
+    "year": 2022,
+    "genres": [
+      "Action",
+      "Thriller"
+    ],
+    "overview": "A special agent investigates a series of murders committed by a masked group of vigilantes, leading to a massive drug cartel ringleader.",
+    "ratings": {
+      "imdb": 8.3,
+      "rottenTomatoes": 88,
+      "letterboxd": 3.82
+    },
+    "platform": "Disney+ Hotstar",
+    "releaseDate": "2022-06-03",
+    "featured": true,
+    "youtubeTrailer": "https://www.youtube.com/watch?v=OKBMCL-FRPU",
+    "imdbId": "tt9179430",
+    "posterUrl": "https://m.media-amazon.com/images/M/MV5BNDEyMWQ0ZDktNTY0MC00YWRkLWFlMjQtMDUxMjRlMDhmMmRlXkEyXkFqcGc@._V1_.jpg",
+    "letterboxdSlug": "vikram-2022"
+  },
+  {
+    "id": "tam-4",
+    "title": "Kadaisi Vivasayi",
+    "type": "movie",
+    "language": "Tamil",
+    "year": 2021,
+    "genres": [
+      "Drama"
+    ],
+    "overview": "An 85-year-old farmer is the last active agriculturalist in his village. He gets falsely accused of killing a peacock, disrupting his final crop.",
+    "ratings": {
+      "imdb": 8.7,
+      "rottenTomatoes": 100,
+      "letterboxd": 4.28
+    },
+    "platform": "SonyLIV",
+    "releaseDate": "2022-02-11",
+    "featured": false,
+    "youtubeTrailer": "https://www.youtube.com/watch?v=F3aJ10Q62yE",
+    "imdbId": "tt10300570",
+    "posterUrl": "https://m.media-amazon.com/images/M/MV5BNTUzOWFmYTQtZGFmYi00N2Y0LWFiNmYtMzgxMGNkYzJmYTBiXkEyXkFqcGc@._V1_.jpg",
+    "letterboxdSlug": "kadaisi-vivasayi"
+  },
+  {
+    "id": "tam-5",
+    "title": "Suzhal: The Vortex",
+    "type": "tv",
+    "language": "Tamil",
+    "year": 2022,
+    "genres": [
+      "Crime",
+      "Mystery",
+      "Thriller"
+    ],
+    "overview": "In a micro-festival in a small industrial town in South India, a missing person case spirals into a dark, multi-layered conspiracy.",
+    "ratings": {
+      "imdb": 8.1,
+      "rottenTomatoes": 85,
+      "letterboxd": 3.67
+    },
+    "platform": "Prime Video",
+    "releaseDate": "2022-06-17",
+    "featured": false,
+    "youtubeTrailer": "https://www.youtube.com/watch?v=nE3G4MeqlR0",
+    "imdbId": "tt20873118",
+    "posterUrl": "https://m.media-amazon.com/images/M/MV5BYzJlN2JkZjktOWE2OS00Mjk3LWE4MTAtMTcyMjMxNTdmMWFiXkEyXkFqcGc@._V1_.jpg",
+    "letterboxdSlug": "suzhal-the-vortex"
+  },
+  {
+    "id": "tam-6",
+    "title": "Jetlee",
+    "type": "movie",
+    "language": "Tamil",
+    "year": 2026,
+    "genres": [
+      "Action",
+      "Comedy"
+    ],
+    "overview": "A high-octane martial arts comedy about an underdog auto driver in Chennai who becomes an accidental vigilante defending his community.",
+    "ratings": {
+      "imdb": 6.1,
+      "rottenTomatoes": 78,
+      "letterboxd": 3.06
+    },
+    "platform": "JioCinema",
+    "releaseDate": "2026-05-25",
+    "featured": true,
+    "youtubeTrailer": "https://www.youtube.com/results?search_query=Jetlee+Tamil+Movie+Trailer",
+    "imdbId": "tt38907386",
+    "posterUrl": "https://m.media-amazon.com/images/M/MV5BMjdkMWE2MTYtZDZmNC00MTEzLWI1MTItNWExODQ4MzBiZWMzXkEyXkFqcGc@._V1_.jpg",
+    "letterboxdSlug": "jetlee"
+  },
+  {
+    "id": "tam-7",
+    "title": "Cousins & Kalyanams",
+    "type": "tv",
+    "language": "Tamil",
+    "year": 2026,
+    "genres": [
+      "Comedy",
+      "Drama",
+      "Romance"
+    ],
+    "overview": "A massive, chaotic family wedding in Madurai sets the stage for cousin rivalries, long-lost loves, and humorous misadventures.",
+    "ratings": {
+      "imdb": 7.2,
+      "rottenTomatoes": 80,
+      "letterboxd": 3.5
+    },
+    "platform": "JioCinema",
+    "releaseDate": "2026-05-29",
+    "featured": false,
+    "youtubeTrailer": "https://www.youtube.com/results?search_query=Cousins+and+Kalyanams+Trailer",
+    "imdbId": "tt42973705"
+  },
+  {
+    "id": "mal-1",
+    "title": "Manjummel Boys",
+    "type": "movie",
+    "language": "Malayalam",
+    "year": 2024,
+    "genres": [
+      "Adventure",
+      "Drama",
+      "Thriller"
+    ],
+    "overview": "A group of friends from a small town in Kerala face an extreme test of bond and courage when one of them falls deep into the Guna Caves in Kodaikanal.",
+    "ratings": {
+      "imdb": 8.2,
+      "rottenTomatoes": 95,
+      "letterboxd": 4.01
+    },
+    "platform": "Disney+ Hotstar",
+    "releaseDate": "2024-02-22",
+    "featured": true,
+    "youtubeTrailer": "https://www.youtube.com/watch?v=coDGLFvWcM0",
+    "imdbId": "tt26458038",
+    "posterUrl": "https://m.media-amazon.com/images/M/MV5BMDVkOGEzZDgtYWU4Yi00MDA3LWE4YmQtYjQxNDgwNDYxNGU4XkEyXkFqcGc@._V1_.jpg",
+    "letterboxdSlug": "manjummel-boys"
+  },
+  {
+    "id": "mal-2",
+    "title": "Aavesham",
+    "type": "movie",
+    "language": "Malayalam",
+    "year": 2024,
+    "genres": [
+      "Action",
+      "Comedy"
+    ],
+    "overview": "Three college students in Bangalore seek the help of a quirky local gangster named Ranga to get revenge on senior bullies.",
+    "ratings": {
+      "imdb": 7.9,
+      "rottenTomatoes": 91,
+      "letterboxd": 3.85
+    },
+    "platform": "Prime Video",
+    "releaseDate": "2024-04-11",
+    "featured": true,
+    "youtubeTrailer": "https://www.youtube.com/watch?v=L0y5TNu-4vA",
+    "letterboxdSlug": "aavesham-2024",
+    "posterUrl": "https://a.ltrbxd.com/resized/film-poster/9/7/8/0/0/8/978008-aavesham-0-230-0-345-crop.jpg"
+  },
+  {
+    "id": "mal-3",
+    "title": "Premalu",
+    "type": "movie",
+    "language": "Malayalam",
+    "year": 2024,
+    "genres": [
+      "Comedy",
+      "Romance"
+    ],
+    "overview": "Sachin, a graduate struggling to find direction, falls for Reenu, an IT professional in Hyderabad, resulting in a series of hilarious romantic struggles.",
+    "ratings": {
+      "imdb": 7.8,
+      "rottenTomatoes": 89,
+      "letterboxd": 3.74
+    },
+    "platform": "Disney+ Hotstar",
+    "releaseDate": "2024-02-09",
+    "featured": false,
+    "youtubeTrailer": "https://www.youtube.com/watch?v=rIIpTPhI_x4",
+    "letterboxdSlug": "premalu",
+    "posterUrl": "https://a.ltrbxd.com/resized/film-poster/1/0/3/6/6/2/8/1036628-premalu-0-230-0-345-crop.jpg"
+  },
+  {
+    "id": "mal-4",
+    "title": "Bramayugam",
+    "type": "movie",
+    "language": "Malayalam",
+    "year": 2024,
+    "genres": [
+      "Horror",
+      "Mystery",
+      "Thriller"
+    ],
+    "overview": "Shot entirely in black and white, a court singer escapes slavery but seeks refuge in an old mansion owned by a manipulative, sinister lord.",
+    "ratings": {
+      "imdb": 7.9,
+      "rottenTomatoes": 92,
+      "letterboxd": 3.83
+    },
+    "platform": "SonyLIV",
+    "releaseDate": "2024-02-15",
+    "featured": false,
+    "youtubeTrailer": "https://www.youtube.com/watch?v=f2d1e2TqPjA",
+    "letterboxdSlug": "bramayugam",
+    "posterUrl": "https://a.ltrbxd.com/resized/film-poster/1/0/5/4/1/5/0/1054150-bramayugam-0-230-0-345-crop.jpg"
+  },
+  {
+    "id": "eng-1",
+    "title": "Severance",
+    "type": "tv",
+    "language": "English",
+    "year": 2022,
+    "genres": [
+      "Sci-Fi",
+      "Thriller",
+      "Mystery"
+    ],
+    "overview": "Mark leads a team of office workers whose memories have been surgically divided between their work and personal lives. A mysterious colleague triggers a path of discovery.",
+    "ratings": {
+      "imdb": 8.7,
+      "rottenTomatoes": 97,
+      "letterboxd": 4.23
+    },
+    "platform": "Apple TV+",
+    "releaseDate": "2022-02-18",
+    "featured": true,
+    "youtubeTrailer": "https://www.youtube.com/watch?v=xKTg5y0Hn1o",
+    "letterboxdSlug": "severance-2022",
+    "posterUrl": "https://a.ltrbxd.com/resized/film-poster/1/0/8/9/9/8/7/1089987-severance-0-230-0-345-crop.jpg"
+  },
+  {
+    "id": "eng-2",
+    "title": "Succession",
+    "type": "tv",
+    "language": "English",
+    "year": 2018,
+    "genres": [
+      "Comedy",
+      "Drama"
+    ],
+    "overview": "The Roy family is known for controlling the biggest media and entertainment company in the world. However, their world changes when their father steps down.",
+    "ratings": {
+      "imdb": 8.8,
+      "rottenTomatoes": 95,
+      "letterboxd": 3.77
+    },
+    "platform": "JioCinema",
+    "releaseDate": "2023-03-26",
+    "featured": true,
+    "youtubeTrailer": "https://www.youtube.com/watch?v=t33SZee2fa0",
+    "imdbId": "tt7660850",
+    "posterUrl": "https://m.media-amazon.com/images/M/MV5BYTY4YTVkY2QtMjRmOS00YzliLWIxOWQtMTdkOTVkN2UzODNmXkEyXkFqcGc@._V1_.jpg",
+    "letterboxdSlug": "succession"
+  },
+  {
+    "id": "eng-3",
+    "title": "Dune: Part Two",
+    "type": "movie",
+    "language": "English",
+    "year": 2024,
+    "genres": [
+      "Sci-Fi",
+      "Adventure",
+      "Action"
+    ],
+    "overview": "Paul Atreides unites with Chani and the Fremen while seeking revenge against the conspirators who destroyed his family, striving to prevent a terrible future.",
+    "ratings": {
+      "imdb": 8.4,
+      "rottenTomatoes": 92,
+      "letterboxd": 4.38
+    },
+    "platform": "JioCinema",
+    "releaseDate": "2024-03-01",
+    "featured": false,
+    "youtubeTrailer": "https://www.youtube.com/watch?v=Way9Dexny3w",
+    "imdbId": "tt15239678",
+    "posterUrl": "https://m.media-amazon.com/images/M/MV5BNTc0YmQxMjEtODI5MC00NjFiLTlkMWUtOGQ5NjFmYWUyZGJhXkEyXkFqcGc@._V1_.jpg",
+    "letterboxdSlug": "dune-part-two"
+  },
+  {
+    "id": "eng-4",
+    "title": "Spider-Noir",
+    "type": "tv",
+    "language": "English",
+    "year": 2026,
+    "genres": [
+      "Action",
+      "Sci-Fi",
+      "Mystery",
+      "Noir"
+    ],
+    "overview": "An aging, down-on-his-luck private investigator in 1930s New York is forced to grapple with his past life as the city's one and only superhero.",
+    "ratings": {
+      "imdb": 8.6,
+      "rottenTomatoes": 89,
+      "letterboxd": 4.1
+    },
+    "platform": "Prime Video",
+    "releaseDate": "2026-05-27",
+    "featured": true,
+    "youtubeTrailer": "https://www.youtube.com/results?search_query=Spider-Noir+Nicolas+Cage+Trailer",
+    "imdbId": "tt30460310",
+    "posterUrl": "https://m.media-amazon.com/images/M/MV5BYjU3NjEwNTItMzc1Mi00Y2QyLTljNDItOTQ4YjU4NjZjN2EyXkEyXkFqcGc@._V1_.jpg",
+    "letterboxdSlug": "spider-noir-early-and-free-with-a-live-qa"
+  },
+  {
+    "id": "eng-5",
+    "title": "The Bear",
+    "type": "tv",
+    "language": "English",
+    "year": 2022,
+    "genres": [
+      "Comedy",
+      "Drama"
+    ],
+    "overview": "A young fine-dining chef fights to transform his family's gritty Chicago sandwich shop, dealing with grief, a stubborn staff, and huge debts.",
+    "ratings": {
+      "imdb": 8.5,
+      "rottenTomatoes": 99,
+      "letterboxd": 3.87
+    },
+    "platform": "Disney+ Hotstar",
+    "releaseDate": "2022-06-23",
+    "featured": false,
+    "youtubeTrailer": "https://www.youtube.com/watch?v=y-csmW8vszg",
+    "imdbId": "tt14452776",
+    "posterUrl": "https://m.media-amazon.com/images/M/MV5BMjk2NWI5OTctODcwYy00NGRmLWFmN2YtOTZiNzFiYjVlODBkXkEyXkFqcGc@._V1_.jpg",
+    "letterboxdSlug": "the-bear"
+  },
+  {
+    "id": "hin-1",
+    "title": "Panchayat",
+    "type": "tv",
+    "language": "Hindi",
+    "year": 2020,
+    "genres": [
+      "Comedy",
+      "Drama"
+    ],
+    "overview": "An engineering graduate takes up a low-salary job as a secretary in a remote panchayat office in rural Phulera, Uttar Pradesh, encountering eccentric villagers.",
+    "ratings": {
+      "imdb": 9,
+      "rottenTomatoes": 90,
+      "letterboxd": 3.75
+    },
+    "platform": "Prime Video",
+    "releaseDate": "2020-04-03",
+    "featured": true,
+    "youtubeTrailer": "https://www.youtube.com/watch?v=m68gK5pTpe8",
+    "imdbId": "tt12004706",
+    "posterUrl": "https://m.media-amazon.com/images/M/MV5BNjMwYWMxNjYtY2I2NC00OWE0LTg4MmQtMmI5ZGI2NzU4ODhiXkEyXkFqcGc@._V1_.jpg",
+    "letterboxdSlug": "panchayat-2017"
+  },
+  {
+    "id": "hin-2",
+    "title": "12th Fail",
+    "type": "movie",
+    "language": "Hindi",
+    "year": 2023,
+    "genres": [
+      "Biography",
+      "Drama"
+    ],
+    "overview": "The real-life story of IPS Officer Manoj Kumar Sharma, who restarts his academic journey from absolute poverty to clear the world's toughest competitive exam: UPSC.",
+    "ratings": {
+      "imdb": 8.7,
+      "rottenTomatoes": 91,
+      "letterboxd": 4.14
+    },
+    "platform": "Disney+ Hotstar",
+    "releaseDate": "2023-10-27",
+    "featured": true,
+    "youtubeTrailer": "https://www.youtube.com/watch?v=2K_m2h0H5p8",
+    "imdbId": "tt23849204",
+    "posterUrl": "https://m.media-amazon.com/images/M/MV5BNTE3OTIxZDYtNjA0NC00N2YxLTg1NGQtOTYxNmZkMDkwOWNjXkEyXkFqcGc@._V1_.jpg",
+    "letterboxdSlug": "12th-fail"
+  },
+  {
+    "id": "hin-3",
+    "title": "Laapataa Ladies",
+    "type": "movie",
+    "language": "Hindi",
+    "year": 2023,
+    "genres": [
+      "Comedy",
+      "Drama"
+    ],
+    "overview": "In 2001, two young brides accidentally get swapped on a crowded train journey, setting off a search that changes the lives of everyone involved.",
+    "ratings": {
+      "imdb": 8.3,
+      "rottenTomatoes": 100,
+      "letterboxd": 4.04
+    },
+    "platform": "Netflix",
+    "releaseDate": "2024-03-01",
+    "featured": false,
+    "youtubeTrailer": "https://www.youtube.com/watch?v=T1n2NnSgM5g",
+    "imdbId": "tt21626284",
+    "posterUrl": "https://m.media-amazon.com/images/M/MV5BZGI5NzVmNDktZWY2Ni00ZGMwLTlhMzctNzJhYTgzZmQ2ZjNjXkEyXkFqcGc@._V1_.jpg",
+    "letterboxdSlug": "lost-ladies"
+  },
+  {
+    "id": "hin-4",
+    "title": "Jubilee",
+    "type": "tv",
+    "language": "Hindi",
+    "year": 2023,
+    "genres": [
+      "Drama"
+    ],
+    "overview": "A thrilling drama set in the golden age of Hindi cinema, detailing the gambles, dreams, and betrayals of filmmakers, stars, and refugees post-partition.",
+    "ratings": {
+      "imdb": 8.3,
+      "rottenTomatoes": 94,
+      "letterboxd": 3.85
+    },
+    "platform": "Prime Video",
+    "releaseDate": "2023-04-07",
+    "featured": false,
+    "youtubeTrailer": "https://www.youtube.com/watch?v=q6t8kKqS-7g",
+    "imdbId": "tt19868804",
+    "posterUrl": "https://m.media-amazon.com/images/M/MV5BYzJjNDRkOTUtYmY0Ni00MWE3LWJjNGItNTIxNjQxYmQyMTA4XkEyXkFqcGc@._V1_.jpg",
+    "letterboxdSlug": "jubilee-2023"
+  },
+  {
+    "id": "hin-5",
+    "title": "Inspector Avinash",
+    "type": "tv",
+    "language": "Hindi",
+    "year": 2023,
+    "genres": [
+      "Crime",
+      "Drama",
+      "Action"
+    ],
+    "overview": "Based on the real-life trials of police officer Avinash Mishra, who tackled the rising crime rates in Uttar Pradesh during the late 90s.",
+    "ratings": {
+      "imdb": 7.6,
+      "rottenTomatoes": 75,
+      "letterboxd": 3.4
+    },
+    "platform": "JioCinema",
+    "releaseDate": "2026-05-15",
+    "featured": false,
+    "youtubeTrailer": "https://www.youtube.com/results?search_query=Inspector+Avinash+Season+2+Trailer",
+    "imdbId": "tt13847564",
+    "posterUrl": "https://m.media-amazon.com/images/M/MV5BNmFkMDllYzItMTcxYi00ZDU1LTk1ZjUtZDg0ZjdjNWQ0MWY4XkEyXkFqcGc@._V1_.jpg",
+    "letterboxdSlug": "inspector-avinash"
+  },
+  {
+    "id": "oth-1",
+    "title": "Parasite",
+    "type": "movie",
+    "language": "Korean",
+    "year": 2019,
+    "genres": [
+      "Drama",
+      "Thriller"
+    ],
+    "overview": "Greed and class discrimination threaten the newly formed symbiotic relationship between the wealthy Park family and the destitute Kim clan.",
+    "ratings": {
+      "imdb": 8.5,
+      "rottenTomatoes": 99,
+      "letterboxd": 4.53
+    },
+    "platform": "SonyLIV",
+    "releaseDate": "2019-10-11",
+    "featured": true,
+    "youtubeTrailer": "https://www.youtube.com/watch?v=5xH0HfJHsaY",
+    "imdbId": "tt6751668",
+    "posterUrl": "https://m.media-amazon.com/images/M/MV5BYjk1Y2U4MjQtY2ZiNS00OWQyLWI3MmYtZWUwNmRjYWRiNWNhXkEyXkFqcGc@._V1_.jpg",
+    "letterboxdSlug": "parasite-2019"
+  },
+  {
+    "id": "oth-2",
+    "title": "Godzilla Minus One",
+    "type": "movie",
+    "language": "Japanese",
+    "year": 2023,
+    "genres": [
+      "Action",
+      "Sci-Fi",
+      "Drama"
+    ],
+    "overview": "Post-war Japan is at its lowest point when a new crisis emerges in the form of a giant beast, baptized in the horrific power of the atomic bomb.",
+    "ratings": {
+      "imdb": 7.7,
+      "rottenTomatoes": 98,
+      "letterboxd": 4.07
+    },
+    "platform": "Netflix",
+    "releaseDate": "2023-11-03",
+    "featured": false,
+    "youtubeTrailer": "https://www.youtube.com/watch?v=r7D3VfA5U20",
+    "imdbId": "tt23289160",
+    "posterUrl": "https://m.media-amazon.com/images/M/MV5BMjc5MjllMGUtMDIwMS00ZDVkLWEzODQtM2NlMTMwMTZhNThmXkEyXkFqcGc@._V1_.jpg",
+    "letterboxdSlug": "godzilla-minus-one"
+  }
+]

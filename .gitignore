@@ -1,0 +1,32 @@
+# Dependency directories
+node_modules/
+
+# Build output
+dist/
+
+# Python virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# Python cache and bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Mac OS metadata
+.DS_Store
+
+# IDEs and editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Local logs
+*.log

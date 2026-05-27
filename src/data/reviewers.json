@@ -1,0 +1,17 @@
+[
+  {
+    "id": "rev-1",
+    "name": "filmicraft arun",
+    "urlPattern": "https://www.youtube.com/results?search_query=filmicraft+arun+{title}"
+  },
+  {
+    "id": "rev-2",
+    "name": "tamil talkies",
+    "urlPattern": "https://www.youtube.com/results?search_query=tamil+talkies+{title}"
+  },
+  {
+    "id": "rev-3",
+    "name": "baradwaj rangan",
+    "urlPattern": "https://www.youtube.com/results?search_query=baradwaj+rangan+{title}"
+  }
+]
