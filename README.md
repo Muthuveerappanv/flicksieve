@@ -39,28 +39,19 @@ A premium, interactive media dashboard designed to curate, filter, and track mov
 - Node.js (v18+)
 - Python (v3.9+)
 
-### 1. Clone & Install Node Dependencies
+### 1. Clone & Setup Project
+FlickSieve has an automated setup script. Running `npm install` will automatically download Node modules, create the Python virtual environment (`.venv/`), and install all Python scraping dependencies (e.g. `requests`, `beautifulsoup4`, `letterboxdpy`):
 ```bash
+# Clone the repository
 git clone https://github.com/Muthuveerappanv/flicksieve.git
 cd flicksieve
+
+# Run unified setup
 npm install
 ```
 
-### 2. Set Up Python Virtual Environment
-Vite config expects the Python virtual environment to be located inside `.venv/` at the project root:
-```bash
-# Create virtual environment
-python3 -m venv .venv
-
-# Activate virtual environment
-# On macOS/Linux:
-source .venv/bin/activate
-# On Windows:
-.venv\Scripts\activate
-
-# Install dependencies
-pip install requests beautifulsoup4 letterboxdpy
-```
+> [!NOTE]
+> Make sure `python3` is installed on your system so the postinstall script can automatically configure the virtual environment. If the script fails, you can set it up manually: `python3 -m venv .venv && .venv/bin/pip install requests beautifulsoup4 letterboxdpy`.
 
 ### 3. Run Development Server
 Start the frontend and local API handlers:
