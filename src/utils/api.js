@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
+import { openUrl } from '@tauri-apps/plugin-opener';
 
-const isTauri = () => typeof window !== 'undefined' && !!window.__TAURI_INTERNALS__;
+export const isTauri = () => typeof window !== 'undefined' && !!window.__TAURI_INTERNALS__;
 
 /**
  * Fetches Letterboxd rating details.
@@ -234,7 +235,97 @@ export async function fetch91Mobiles(onProgress) {
   } else {
     if (onProgress) onProgress(0, 0, 'Fetching weekly releases...');
     const res = await fetch('/api/scrape-91mobiles');
-    if (!res.ok) throw new Error('Failed to fetch weekly releases from backend.');
     return await res.json();
   }
 }
+
+/**
+ * Gets the current data folder path.
+ */
+export async function getDataFolder() {
+  if (isTauri()) {
+    return await invoke('get_data_folder');
+  } else {
+    const res = await fetch('/api/config');
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    const data = await res.json();
+    return data.dataFolder;
+  }
+}
+
+/**
+ * Sets/updates the data folder path.
+ */
+export async function setDataFolder(path) {
+  if (isTauri()) {
+    await invoke('set_data_folder', { path });
+  } else {
+    const res = await fetch('/api/config', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ dataFolder: path })
+    });
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+  }
+}
+
+/**
+ * Loads content of a data file by filename.
+ */
+export async function loadDataFile(filename) {
+  if (isTauri()) {
+    try {
+      return await invoke('load_data_file', { filename });
+    } catch (err) {
+      if (err.includes('NOT_FOUND')) {
+        return null;
+      }
+      throw new Error(err);
+    }
+  } else {
+    const res = await fetch(`/api/data?file=${encodeURIComponent(filename)}`);
+    if (res.status === 404) {
+      return null;
+    }
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    return await res.text();
+  }
+}
+
+/**
+ * Saves content of a data file by filename.
+ */
+export async function saveDataFile(filename, content) {
+  if (isTauri()) {
+    await invoke('save_data_file', { filename, content });
+  } else {
+    const res = await fetch(`/api/data?file=${encodeURIComponent(filename)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: content
+    });
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+  }
+}
+
+/**
+ * Opens a URL in the default system browser when running in Tauri,
+ * or in a new window/tab when running in a web browser.
+ */
+export async function openExternalUrl(url) {
+  if (isTauri()) {
+    try {
+      await openUrl(url);
+    } catch (err) {
+      console.error('Failed to open URL via Tauri opener plugin:', err);
+      window.open(url, '_blank');
+    }
+  } else {
+    window.open(url, '_blank');
+  }
+}
+

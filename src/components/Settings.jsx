@@ -12,12 +12,19 @@ export default function Settings({
   onImportData,
   exportDataJSON,
   theme,
-  onThemeChange
+  onThemeChange,
+  dataFolder = '',
+  onUpdateDataFolder
 }) {
   // Add Reviewer state
   const [revName, setRevName] = useState('');
 
+  // Data folder local state
+  const [folderInput, setFolderInput] = useState(dataFolder || '');
 
+  React.useEffect(() => {
+    setFolderInput(dataFolder || '');
+  }, [dataFolder]);
 
   // Import / JSON State
   const [importJson, setImportJson] = useState('');
@@ -110,6 +117,42 @@ export default function Settings({
 
   return (
     <div className="settings-container">
+      {/* SECTION: Data Folder Configuration */}
+      <div className="settings-card" id="settings-data-folder-card">
+        <h2>Data Folder Location</h2>
+        <p className="settings-card-subtitle">
+          Configure the folder path on your computer where FlickSieve stores all its data files (shows, watchlist, etc.). This path is shared between the macOS app and web app.
+        </p>
+
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          if (folderInput.trim()) {
+            onUpdateDataFolder(folderInput.trim());
+          }
+        }} className="add-channel-form" id="data-folder-form">
+          <div className="form-group" style={{ gridColumn: 'span 2' }}>
+            <label className="form-label" htmlFor="data-folder-input">Local Folder Path</label>
+            <input
+              type="text"
+              id="data-folder-input"
+              className="form-input"
+              value={folderInput}
+              onChange={(e) => setFolderInput(e.target.value)}
+              placeholder="e.g. ~/.flicksieve"
+              required
+            />
+          </div>
+          <button 
+            type="submit" 
+            id="btn-update-data-folder"
+            className="btn btn-primary" 
+            style={{ alignSelf: 'flex-end', padding: '0.75rem 1.5rem' }}
+          >
+            Update Folder
+          </button>
+        </form>
+      </div>
+
       {/* SECTION: Appearance & Theme */}
       <div className="settings-card" id="settings-appearance-card">
         <h2>Appearance & Theme</h2>

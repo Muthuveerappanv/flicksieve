@@ -2,6 +2,39 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
+import { isTauri, openExternalUrl } from './utils/api.js'
+
+// Setup global link interception and window.open override for Tauri
+if (isTauri()) {
+  // 1. Intercept all click events on the document in the capture phase
+  document.addEventListener('click', (e) => {
+    const anchor = e.target.closest('a');
+    if (anchor) {
+      const target = anchor.getAttribute('target');
+      const href = anchor.getAttribute('href');
+      
+      // If target is _blank and we have a valid HTTP/HTTPS URL, open via system browser
+      if (target === '_blank' && href && (href.startsWith('http://') || href.startsWith('https://'))) {
+        e.preventDefault();
+        openExternalUrl(href).catch(err => {
+          console.error('Error opening external URL:', err);
+        });
+      }
+    }
+  }, true);
+
+  // 2. Override window.open to use the Tauri opener
+  const originalWindowOpen = window.open;
+  window.open = (url, target, features) => {
+    if ((target === '_blank' || !target) && url && (url.startsWith('http://') || url.startsWith('https://'))) {
+      openExternalUrl(url).catch(err => {
+        console.error('Error opening external URL via window.open:', err);
+      });
+      return null;
+    }
+    return originalWindowOpen(url, target, features);
+  };
+}
 
 class ErrorBoundary extends React.Component {
   constructor(props) {

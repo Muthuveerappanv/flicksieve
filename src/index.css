@@ -653,6 +653,30 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 4px 12px rgba(var(--accent-primary-rgb), 0.1);
 }
 
+.rating-clickable.active {
+  border-color: var(--accent-primary) !important;
+  background-color: rgba(var(--accent-primary-rgb), 0.1) !important;
+  box-shadow: 0 4px 20px rgba(var(--accent-primary-rgb), 0.1);
+}
+
+.sieved-out-metric-clickable {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.sieved-out-metric-clickable:hover {
+  border-color: rgba(239, 68, 68, 0.5) !important;
+  background-color: rgba(239, 68, 68, 0.1) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1);
+}
+
+.sieved-out-metric-clickable.active {
+  border-color: rgba(239, 68, 68, 0.8) !important;
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.15);
+}
+
 .rating-source-label {
   font-size: 0.65rem;
   color: var(--text-muted);

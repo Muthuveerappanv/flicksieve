@@ -8,7 +8,8 @@ export default function ShowCard({
   onDeleteShow,
   onRefreshShowRatings,
   reviewers = [],
-  minSieveScore = 3.0
+  minSieveScore = 3.0,
+  includeUnrated = true
 }) {
   const [showYoutubeMenu, setShowYoutubeMenu] = useState(false);
   const menuRef = useRef(null);
@@ -88,7 +89,7 @@ export default function ShowCard({
               {type === 'movie' ? <Film size={12} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'text-top' }} /> : <Tv size={12} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'text-top' }} />}
               {type === 'movie' ? 'Movie' : 'Series'}
             </span>
-            {sieveScore !== 'N/A' && parseFloat(sieveScore) <= minSieveScore && (
+            {((sieveScore !== 'N/A' && parseFloat(sieveScore) <= minSieveScore) || (sieveScore === 'N/A' && !includeUnrated)) && (
               <span className="tag-type" style={{ backgroundColor: 'rgba(239, 68, 68, 0.85)', color: 'white', fontWeight: 600 }}>
                 Sieved Out
               </span>

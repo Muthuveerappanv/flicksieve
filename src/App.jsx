@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Compass, RotateCw, Calendar, Bookmark, Settings as SettingsIcon, Star, Filter, Heart, Search as SearchIcon, X } from 'lucide-react';
+import { Compass, RotateCw, Calendar, Bookmark, Settings as SettingsIcon, Star, Filter, Heart, Search as SearchIcon, X, EyeOff } from 'lucide-react';
 import { initialShows, initialReviewers } from './data/shows';
-import { fetchLetterboxd, fetchRottenTomatoes } from './utils/api';
+import { fetchLetterboxd, fetchRottenTomatoes, getDataFolder, setDataFolder, loadDataFile, saveDataFile } from './utils/api';
 import ShowCard from './components/ShowCard';
 import DeciderWheel from './components/DeciderWheel';
 import OttTracker from './components/OttTracker';
@@ -11,87 +11,168 @@ import AddTitleModal from './components/AddTitleModal';
 
 export default function App() {
   // --- STATE ---
-  const [shows, setShows] = useState(() => {
-    try {
-      const saved = localStorage.getItem('flicksieve_shows');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+  const [shows, setShows] = useState(initialShows);
+  const [reviewers, setReviewers] = useState(initialReviewers);
+  const [watchlist, setWatchlist] = useState([]);
+  const [watchedHistory, setWatchedHistory] = useState([]);
+  const [theme, setTheme] = useState('amethyst');
+  const [dataFolder, setDataFolderState] = useState('');
+  const [isLoadingData, setIsLoadingData] = useState(true);
+
+  // Load data on mount
+  useEffect(() => {
+    async function loadAllData() {
+      try {
+        setIsLoadingData(true);
+        const folder = await getDataFolder();
+        setDataFolderState(folder);
+        
+        const showsContent = await loadDataFile('shows.json');
+        if (showsContent) {
+          const parsed = JSON.parse(showsContent);
+          if (Array.isArray(parsed)) setShows(parsed);
+        } else {
+          await saveDataFile('shows.json', JSON.stringify(initialShows, null, 2));
         }
-      }
-    } catch (e) {
-      console.error("Error reading flicksieve_shows from localStorage:", e);
-    }
-    return initialShows;
-  });
 
-  const [reviewers, setReviewers] = useState(() => {
-    try {
-      const saved = localStorage.getItem('flicksieve_reviewers');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+        const reviewersContent = await loadDataFile('reviewers.json');
+        if (reviewersContent) {
+          const parsed = JSON.parse(reviewersContent);
+          if (Array.isArray(parsed)) setReviewers(parsed);
+        } else {
+          await saveDataFile('reviewers.json', JSON.stringify(initialReviewers, null, 2));
         }
-      }
-    } catch (e) {
-      console.error("Error reading flicksieve_reviewers from localStorage:", e);
-    }
-    return initialReviewers;
-  });
 
-  const [watchlist, setWatchlist] = useState(() => {
-    try {
-      const saved = localStorage.getItem('flicksieve_watchlist');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed;
+        const watchlistContent = await loadDataFile('watchlist.json');
+        if (watchlistContent) {
+          const parsed = JSON.parse(watchlistContent);
+          if (Array.isArray(parsed)) setWatchlist(parsed);
+        } else {
+          await saveDataFile('watchlist.json', JSON.stringify([], null, 2));
         }
-      }
-    } catch (e) {
-      console.error("Error reading flicksieve_watchlist from localStorage:", e);
-    }
-    return [];
-  });
 
-  const [watchedHistory, setWatchedHistory] = useState(() => {
-    try {
-      const saved = localStorage.getItem('flicksieve_history');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed;
+        const historyContent = await loadDataFile('history.json');
+        if (historyContent) {
+          const parsed = JSON.parse(historyContent);
+          if (Array.isArray(parsed)) setWatchedHistory(parsed);
+        } else {
+          await saveDataFile('history.json', JSON.stringify([], null, 2));
         }
+
+        const themeContent = await loadDataFile('theme.json');
+        if (themeContent) {
+          let t = themeContent;
+          try {
+            t = JSON.parse(themeContent);
+          } catch(e) {}
+          if (t) setTheme(t);
+        } else {
+          await saveDataFile('theme.json', JSON.stringify('amethyst', null, 2));
+        }
+      } catch (err) {
+        console.error("Error loading FlickSieve data:", err);
+      } finally {
+        setIsLoadingData(false);
       }
-    } catch (e) {
-      console.error("Error reading flicksieve_history from localStorage:", e);
     }
-    return [];
-  });
-
-  // Navigation tab
-  const [activeTab, setActiveTab] = useState('recommendations'); // recommendations | wheel | tracker | watchlist | settings
-
-  // Theme state
-  const [theme, setTheme] = useState(() => {
-    try {
-      return localStorage.getItem('flicksieve_theme') || 'amethyst';
-    } catch (e) {
-      return 'amethyst';
-    }
-  });
+    loadAllData();
+  }, []);
 
   // Apply theme to document element
   useEffect(() => {
     try {
       document.documentElement.setAttribute('data-theme', theme);
-      localStorage.setItem('flicksieve_theme', theme);
     } catch (e) {
-      console.error("Error setting flicksieve_theme:", e);
+      console.error("Error setting theme attribute:", e);
     }
   }, [theme]);
+
+  // Sync state changes to system files once loaded
+  useEffect(() => {
+    if (isLoadingData) return;
+    saveDataFile('shows.json', JSON.stringify(shows, null, 2))
+      .catch(e => console.error("Error saving shows:", e));
+  }, [shows, isLoadingData]);
+
+  useEffect(() => {
+    if (isLoadingData) return;
+    saveDataFile('reviewers.json', JSON.stringify(reviewers, null, 2))
+      .catch(e => console.error("Error saving reviewers:", e));
+  }, [reviewers, isLoadingData]);
+
+  useEffect(() => {
+    if (isLoadingData) return;
+    saveDataFile('watchlist.json', JSON.stringify(watchlist, null, 2))
+      .catch(e => console.error("Error saving watchlist:", e));
+  }, [watchlist, isLoadingData]);
+
+  useEffect(() => {
+    if (isLoadingData) return;
+    saveDataFile('history.json', JSON.stringify(watchedHistory, null, 2))
+      .catch(e => console.error("Error saving history:", e));
+  }, [watchedHistory, isLoadingData]);
+
+  useEffect(() => {
+    if (isLoadingData) return;
+    saveDataFile('theme.json', JSON.stringify(theme, null, 2))
+      .catch(e => console.error("Error saving theme:", e));
+  }, [theme, isLoadingData]);
+
+  const handleUpdateDataFolder = async (newFolder) => {
+    try {
+      await setDataFolder(newFolder);
+      setDataFolderState(newFolder);
+      triggerToast(`Data folder updated to: ${newFolder}`);
+      
+      const showsContent = await loadDataFile('shows.json');
+      if (showsContent) {
+        const parsed = JSON.parse(showsContent);
+        if (Array.isArray(parsed)) setShows(parsed);
+      } else {
+        await saveDataFile('shows.json', JSON.stringify(shows, null, 2));
+      }
+
+      const reviewersContent = await loadDataFile('reviewers.json');
+      if (reviewersContent) {
+        const parsed = JSON.parse(reviewersContent);
+        if (Array.isArray(parsed)) setReviewers(parsed);
+      } else {
+        await saveDataFile('reviewers.json', JSON.stringify(reviewers, null, 2));
+      }
+
+      const watchlistContent = await loadDataFile('watchlist.json');
+      if (watchlistContent) {
+        const parsed = JSON.parse(watchlistContent);
+        if (Array.isArray(parsed)) setWatchlist(parsed);
+      } else {
+        await saveDataFile('watchlist.json', JSON.stringify(watchlist, null, 2));
+      }
+
+      const historyContent = await loadDataFile('history.json');
+      if (historyContent) {
+        const parsed = JSON.parse(historyContent);
+        if (Array.isArray(parsed)) setWatchedHistory(parsed);
+      } else {
+        await saveDataFile('history.json', JSON.stringify(watchedHistory, null, 2));
+      }
+
+      const themeContent = await loadDataFile('theme.json');
+      if (themeContent) {
+        let t = themeContent;
+        try {
+          t = JSON.parse(themeContent);
+        } catch(e) {}
+        if (t) setTheme(t);
+      } else {
+        await saveDataFile('theme.json', JSON.stringify(theme, null, 2));
+      }
+    } catch (err) {
+      console.error("Error changing/migrating data folder:", err);
+      alert(`Failed to update data folder: ${err.message}`);
+    }
+  };
+  // Navigation tab
+  const [activeTab, setActiveTab] = useState('recommendations'); // recommendations | wheel | tracker | watchlist | settings
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -109,23 +190,6 @@ export default function App() {
 
   // Delete Title Modal State
   const [showToDelete, setShowToDelete] = useState(null);
-
-  // --- PERSISTENCE ---
-  useEffect(() => {
-    localStorage.setItem('flicksieve_shows', JSON.stringify(shows));
-  }, [shows]);
-
-  useEffect(() => {
-    localStorage.setItem('flicksieve_reviewers', JSON.stringify(reviewers));
-  }, [reviewers]);
-
-  useEffect(() => {
-    localStorage.setItem('flicksieve_watchlist', JSON.stringify(watchlist));
-  }, [watchlist]);
-
-  useEffect(() => {
-    localStorage.setItem('flicksieve_history', JSON.stringify(watchedHistory));
-  }, [watchedHistory]);
 
   // --- TOAST HELPER ---
   const triggerToast = (message, type = 'success') => {
@@ -573,6 +637,55 @@ export default function App() {
     });
   }, [shows, searchTerm, selectedType, selectedLanguage, selectedPlatform, minSieveScore, includeUnrated]);
 
+  // Perform Sieving for Sieved Out Shows
+  const sievedOutShows = React.useMemo(() => {
+    return shows.filter(show => {
+      // 1. Sieve threshold check: Must be LESS than or equal to minimum threshold (e.g. 3.0/5)
+      // or unrated if includeUnrated is false.
+      const titleMatchesSearch = searchTerm && show.title.toLowerCase().includes(searchTerm.toLowerCase());
+      const score = calculateShowScore(show);
+      const isUnrated = show.ratings.imdb === null && show.ratings.rottenTomatoes === null && show.ratings.letterboxd === null;
+      
+      let isSievedOut = false;
+      if (!titleMatchesSearch) {
+        if (isUnrated) {
+          if (!includeUnrated) isSievedOut = true;
+        } else {
+          if (score <= minSieveScore) isSievedOut = true;
+        }
+      }
+
+      if (!isSievedOut) return false;
+
+      // 2. Search Text
+      if (searchTerm && !show.title.toLowerCase().includes(searchTerm.toLowerCase()) && 
+          !show.genres.some(g => g.toLowerCase().includes(searchTerm.toLowerCase()))) {
+        return false;
+      }
+
+      // 3. Media Type (Movie/Series)
+      if (selectedType !== 'all' && show.type !== selectedType) {
+        return false;
+      }
+
+      // 4. Platform
+      if (selectedPlatform !== 'All' && show.platform !== selectedPlatform) {
+        return false;
+      }
+
+      // 5. Language
+      if (selectedLanguage !== 'All') {
+        if (selectedLanguage === 'Other') {
+          return !['tamil', 'english', 'malayalam', 'hindi'].includes(show.language.toLowerCase());
+        } else {
+          return show.language.toLowerCase() === selectedLanguage.toLowerCase();
+        }
+      }
+
+      return true;
+    });
+  }, [shows, searchTerm, selectedType, selectedLanguage, selectedPlatform, minSieveScore, includeUnrated]);
+
   // Compute how many got sieved out due to rating threshold alone
   const sievedOutCount = React.useMemo(() => {
     return shows.filter(show => {
@@ -611,6 +724,16 @@ export default function App() {
               >
                 <Compass />
                 Recommendations
+              </button>
+            </li>
+            <li>
+              <button 
+                id="nav-btn-sieved-out"
+                className={`nav-item ${activeTab === 'sieved_out' ? 'active' : ''}`}
+                onClick={() => setActiveTab('sieved_out')}
+              >
+                <EyeOff />
+                Sieved Out
               </button>
             </li>
             <li>
@@ -702,6 +825,14 @@ export default function App() {
                 </p>
               </>
             )}
+            {activeTab === 'sieved_out' && (
+              <>
+                <h1>Sieved Out Titles</h1>
+                <p className="header-subtitle">
+                  Titles with average ratings below your sieve limit ({minSieveScore}/5) or unrated titles.
+                </p>
+              </>
+            )}
             {activeTab === 'wheel' && (
               <>
                 <h1>Decision Paralysis Solver</h1>
@@ -730,13 +861,21 @@ export default function App() {
 
           {/* QUICK DASHBOARD SUMMARY METRICS */}
           <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-            <div className="rating-item" style={{ padding: '0.5rem 1rem', display: 'flex', flexDirection: 'row', gap: '0.75rem', alignItems: 'center' }}>
+            <div 
+              className={`rating-item rating-clickable ${activeTab === 'recommendations' ? 'active' : ''}`}
+              onClick={() => setActiveTab('recommendations')}
+              style={{ padding: '0.5rem 1rem', display: 'flex', flexDirection: 'row', gap: '0.75rem', alignItems: 'center' }}
+            >
               <div style={{ textAlign: 'left' }}>
                 <span className="rating-source-label" style={{ fontSize: '0.6rem' }}>Total in DB</span>
                 <span className="rating-value" style={{ fontSize: '1.1rem' }}>{totalShowsInDb}</span>
               </div>
             </div>
-            <div className="rating-item" style={{ padding: '0.5rem 1rem', display: 'flex', flexDirection: 'row', gap: '0.75rem', alignItems: 'center', borderColor: 'rgba(239, 68, 68, 0.25)', background: 'rgba(239, 68, 68, 0.05)' }}>
+            <div 
+              className={`rating-item sieved-out-metric-clickable ${activeTab === 'sieved_out' ? 'active' : ''}`}
+              onClick={() => setActiveTab('sieved_out')}
+              style={{ padding: '0.5rem 1rem', display: 'flex', flexDirection: 'row', gap: '0.75rem', alignItems: 'center', borderColor: 'rgba(239, 68, 68, 0.25)', background: 'rgba(239, 68, 68, 0.05)' }}
+            >
               <div style={{ textAlign: 'left' }}>
                 <span className="rating-source-label" style={{ fontSize: '0.6rem', color: 'var(--error)' }}>Sieved Out</span>
                 <span className="rating-value" style={{ fontSize: '1.1rem', color: 'var(--error)' }}>{sievedOutCount}</span>
@@ -909,6 +1048,177 @@ export default function App() {
                     onRefreshShowRatings={handleRefreshShowRatings}
                     reviewers={reviewers}
                     minSieveScore={minSieveScore}
+                    includeUnrated={includeUnrated}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* VIEW 1.5: SIEVED OUT FEED */}
+        {activeTab === 'sieved_out' && (
+          <div>
+            {/* Filters dashboard */}
+            <div className="controls-bar">
+              {/* Row 1: Search & Basic select dropdowns */}
+              <div className="controls-row-top">
+                <div className="search-wrapper">
+                  <SearchIcon className="search-icon" />
+                  <input
+                    type="text"
+                    id="search-main-sieved"
+                    className="search-input"
+                    placeholder="Search sieved out titles, genre..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+
+                <select
+                  id="filter-type-sieved"
+                  className="filter-select"
+                  value={selectedType}
+                  onChange={(e) => setSelectedType(e.target.value)}
+                >
+                  <option value="all">All Formats</option>
+                  <option value="movie">Movies Only</option>
+                  <option value="tv">TV Shows Only</option>
+                </select>
+
+                <select
+                  id="filter-platform-sieved"
+                  className="filter-select"
+                  value={selectedPlatform}
+                  onChange={(e) => setSelectedPlatform(e.target.value)}
+                >
+                  <option value="All">All Streaming</option>
+                  {uniquePlatforms.map(plat => (
+                    <option key={plat} value={plat}>{plat}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Row 2: Custom buttons for language toggle and ratings sieve slider */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
+                {/* Language Toggles */}
+                <div className="filter-pills-row">
+                  <span className="pill-group-label">Languages</span>
+                  <button
+                    className={`pill ${selectedLanguage === 'All' ? 'active' : ''}`}
+                    onClick={() => setSelectedLanguage('All')}
+                  >
+                    All
+                  </button>
+                  <button
+                    className={`pill pill-native ${selectedLanguage === 'Tamil' ? 'active' : ''}`}
+                    onClick={() => setSelectedLanguage('Tamil')}
+                  >
+                    Tamil (Native)
+                  </button>
+                  <button
+                    className={`pill ${selectedLanguage === 'English' ? 'active' : ''}`}
+                    onClick={() => setSelectedLanguage('English')}
+                  >
+                    English
+                  </button>
+                  <button
+                    className={`pill ${selectedLanguage === 'Malayalam' ? 'active' : ''}`}
+                    onClick={() => setSelectedLanguage('Malayalam')}
+                  >
+                    Malayalam
+                  </button>
+                  <button
+                    className={`pill ${selectedLanguage === 'Hindi' ? 'active' : ''}`}
+                    onClick={() => setSelectedLanguage('Hindi')}
+                  >
+                    Hindi
+                  </button>
+                  <button
+                    className={`pill ${selectedLanguage === 'Other' ? 'active' : ''}`}
+                    onClick={() => setSelectedLanguage('Other')}
+                  >
+                    Other
+                  </button>
+                </div>
+
+                {/* Sieve Severity Slider */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', backgroundColor: 'var(--bg-tertiary)', padding: '0.5rem 1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Filter size={14} style={{ color: 'var(--accent-primary)' }} />
+                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                      Sieve Limit: &gt; {minSieveScore.toFixed(1)}/5
+                    </span>
+                    <input
+                      type="range"
+                      id="sieve-slider-sieved"
+                      min="3.0"
+                      max="4.5"
+                      step="0.1"
+                      value={minSieveScore}
+                      onChange={(e) => setMinSieveScore(parseFloat(e.target.value))}
+                      style={{ cursor: 'pointer', accentColor: 'var(--accent-primary)', width: '100px' }}
+                    />
+                  </div>
+                  <label 
+                    style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.35rem', 
+                      fontSize: '0.8rem', 
+                      color: 'var(--text-secondary)', 
+                      cursor: 'pointer', 
+                      borderLeft: '1px solid var(--border-color)', 
+                      paddingLeft: '0.75rem' 
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      id="checkbox-include-unrated-sieved"
+                      checked={includeUnrated}
+                      onChange={(e) => setIncludeUnrated(e.target.checked)}
+                      style={{ accentColor: 'var(--accent-primary)', cursor: 'pointer' }}
+                    />
+                    Include Unrated
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Results Grid */}
+            {sievedOutShows.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">✨</div>
+                <h3>No Sieved Out Titles</h3>
+                <p>No titles in this filter subset fell below your minimum sieve threshold of {minSieveScore}/5.</p>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={() => {
+                    setSearchTerm('');
+                    setSelectedType('all');
+                    setSelectedLanguage('All');
+                    setSelectedPlatform('All');
+                    setMinSieveScore(3.0);
+                    setIncludeUnrated(true);
+                  }}
+                  style={{ marginTop: '1.25rem' }}
+                >
+                  Reset All Filters
+                </button>
+              </div>
+            ) : (
+              <div className="shows-grid">
+                {sievedOutShows.map(show => (
+                  <ShowCard
+                    key={show.id}
+                    show={show}
+                    isInWatchlist={watchlist.some(item => item.id === show.id)}
+                    onToggleWatchlist={handleToggleWatchlist}
+                    onDeleteShow={handleDeleteShow}
+                    onRefreshShowRatings={handleRefreshShowRatings}
+                    reviewers={reviewers}
+                    minSieveScore={minSieveScore}
+                    includeUnrated={includeUnrated}
                   />
                 ))}
               </div>
@@ -961,6 +1271,8 @@ export default function App() {
             exportDataJSON={handleExportDataJSON}
             theme={theme}
             onThemeChange={setTheme}
+            dataFolder={dataFolder}
+            onUpdateDataFolder={handleUpdateDataFolder}
           />
         )}
       </main>

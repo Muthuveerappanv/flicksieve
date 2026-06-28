@@ -3,8 +3,40 @@ import react from '@vitejs/plugin-react'
 import { execFile } from 'child_process'
 import path from 'path'
 import url from 'url'
+import fs from 'fs'
+import os from 'os'
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+
+function expandTilde(filepath) {
+  const homedir = os.homedir();
+  if (filepath.startsWith('~/')) {
+    return path.join(homedir, filepath.slice(2));
+  }
+  if (filepath === '~') {
+    return homedir;
+  }
+  return filepath;
+}
+
+const resolveConfigPath = () => {
+  return path.join(os.homedir(), '.flicksieve', 'config.json');
+};
+
+const resolveDataFolder = () => {
+  const configPath = resolveConfigPath();
+  if (fs.existsSync(configPath)) {
+    try {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      if (config && config.dataFolder) {
+        return expandTilde(config.dataFolder);
+      }
+    } catch (err) {
+      console.error('Error reading config file in Vite middleware:', err);
+    }
+  }
+  return path.join(os.homedir(), '.flicksieve');
+};
 
 export default defineConfig({
   plugins: [
@@ -14,6 +46,83 @@ export default defineConfig({
       configureServer(server) {
         server.middlewares.use((req, res, next) => {
           const reqUrl = url.parse(req.url, true);
+
+          if (reqUrl.pathname === '/api/config') {
+            res.setHeader('Content-Type', 'application/json');
+            if (req.method === 'GET') {
+              const dataFolder = resolveDataFolder();
+              res.end(JSON.stringify({ dataFolder }));
+              return;
+            } else if (req.method === 'POST') {
+              let body = '';
+              req.on('data', chunk => { body += chunk; });
+              req.on('end', () => {
+                try {
+                  const { dataFolder } = JSON.parse(body);
+                  if (!dataFolder) {
+                    res.statusCode = 400;
+                    res.end(JSON.stringify({ error: 'dataFolder is required' }));
+                    return;
+                  }
+                  
+                  const expandedPath = expandTilde(dataFolder);
+                  fs.mkdirSync(expandedPath, { recursive: true });
+                  
+                  const configPath = resolveConfigPath();
+                  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+                  
+                  fs.writeFileSync(configPath, JSON.stringify({ dataFolder }, null, 2), 'utf-8');
+                  res.end(JSON.stringify({ success: true }));
+                } catch (e) {
+                  res.statusCode = 500;
+                  res.end(JSON.stringify({ error: e.message }));
+                }
+              });
+              return;
+            }
+          }
+          
+          if (reqUrl.pathname === '/api/data') {
+            const filename = reqUrl.query.file;
+            if (!filename || filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ error: 'Invalid filename' }));
+              return;
+            }
+            
+            const folder = resolveDataFolder();
+            const filePath = path.join(folder, filename);
+            
+            if (req.method === 'GET') {
+              if (!fs.existsSync(filePath)) {
+                res.statusCode = 404;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ error: 'NOT_FOUND' }));
+                return;
+              }
+              res.setHeader('Content-Type', 'application/json');
+              res.end(fs.readFileSync(filePath, 'utf-8'));
+              return;
+            } else if (req.method === 'POST') {
+              let body = '';
+              req.on('data', chunk => { body += chunk; });
+              req.on('end', () => {
+                try {
+                  fs.mkdirSync(folder, { recursive: true });
+                  fs.writeFileSync(filePath, body, 'utf-8');
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ success: true }));
+                } catch (e) {
+                  res.statusCode = 500;
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ error: e.message }));
+                }
+              });
+              return;
+            }
+          }
+
           if (reqUrl.pathname === '/api/letterboxd') {
             const query = reqUrl.query.query;
             const year = reqUrl.query.year || '';

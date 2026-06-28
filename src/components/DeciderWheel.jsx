@@ -9,13 +9,36 @@ export default function DeciderWheel({
   const canvasRef = useRef(null);
   const [isSpinning, setIsSpinning] = useState(false);
   const [selectedShow, setSelectedShow] = useState(null);
+  const [shuffleSeed, setShuffleSeed] = useState(0);
+
+  // Reset selected show when matching shows change
+  useEffect(() => {
+    setSelectedShow(null);
+  }, [matchingShows]);
   
   // Choose up to 8 shows to show on the wheel for readability
   const wheelShows = React.useMemo(() => {
     if (matchingShows.length === 0) return [];
-    // Shuffle and pick 8, or just slice first 8
-    return matchingShows.slice(0, 8);
-  }, [matchingShows]);
+    if (matchingShows.length <= 8) return matchingShows;
+    
+    // We want a random subset of 8 shows.
+    // Shuffle the matching shows array using a deterministic-ish approach based on shuffleSeed.
+    const shuffled = [...matchingShows];
+    let seed = shuffleSeed;
+    const random = () => {
+      const x = Math.sin(seed++) * 10000;
+      return x - Math.floor(x);
+    };
+
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      const temp = shuffled[i];
+      shuffled[i] = shuffled[j];
+      shuffled[j] = temp;
+    }
+
+    return shuffled.slice(0, 8);
+  }, [matchingShows, shuffleSeed]);
 
   const numSlices = wheelShows.length;
   
@@ -229,16 +252,40 @@ export default function DeciderWheel({
           />
         </div>
 
-        <button 
-          id="btn-spin"
-          className="btn btn-primary" 
-          onClick={startSpin}
-          disabled={isSpinning || numSlices === 0}
-          style={{ padding: '0.85rem 2.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1rem' }}
-        >
-          <RotateCw size={18} className={isSpinning ? 'spin-animation' : ''} />
-          {isSpinning ? 'Sieving...' : 'Spin the Wheel'}
-        </button>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <button 
+            id="btn-spin"
+            className="btn btn-primary" 
+            onClick={startSpin}
+            disabled={isSpinning || numSlices === 0}
+            style={{ padding: '0.85rem 2.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1rem' }}
+          >
+            <RotateCw size={18} className={isSpinning ? 'spin-animation' : ''} />
+            {isSpinning ? 'Sieving...' : 'Spin the Wheel'}
+          </button>
+          
+          {matchingShows.length > 8 && (
+            <button 
+              id="btn-shuffle-wheel"
+              className="btn btn-secondary" 
+              onClick={() => {
+                setSelectedShow(null);
+                setShuffleSeed(prev => prev + 1);
+              }}
+              disabled={isSpinning}
+              style={{ padding: '0.85rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1rem' }}
+              title="Shuffle wheel options"
+            >
+              <span>🔀</span> Shuffle
+            </button>
+          )}
+        </div>
+
+        {matchingShows.length > 8 && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '-1.5rem' }}>
+            Showing 8 of {matchingShows.length} matching titles. Spin these, or click <strong>Shuffle</strong> to load a different set.
+          </p>
+        )}
 
         {/* Selected Movie Overlay Panel */}
         {selectedShow && (
