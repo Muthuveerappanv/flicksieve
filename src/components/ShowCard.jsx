@@ -64,11 +64,18 @@ export default function ShowCard({
 
   const isNative = language.toLowerCase() === 'tamil';
 
+  const showLanguage = (language || '').toLowerCase();
+  const matchingReviewers = reviewers.filter(rev => {
+    const revLangs = (rev.languages || []).map(l => l.toLowerCase());
+    return revLangs.includes(showLanguage);
+  });
+
   const handleYoutubeReviewSearch = (reviewerName) => {
     const query = encodeURIComponent(`${reviewerName} ${title} review`);
     window.open(`https://www.youtube.com/results?search_query=${query}`, '_blank');
     setShowYoutubeMenu(false);
   };
+
 
   return (
     <article className="show-card" id={`show-card-${show.id}`}>
@@ -317,7 +324,7 @@ export default function ShowCard({
             </button>
             {showYoutubeMenu && (
               <div className="youtube-menu">
-                {reviewers.length === 0 ? (
+                {matchingReviewers.length === 0 ? (
                   <button 
                     className="youtube-menu-item"
                     onClick={() => handleYoutubeReviewSearch("movie review")}
@@ -325,7 +332,7 @@ export default function ShowCard({
                     Generic Review Search
                   </button>
                 ) : (
-                  reviewers.map(rev => (
+                  matchingReviewers.map(rev => (
                     <button 
                       key={rev.id} 
                       className="youtube-menu-item"

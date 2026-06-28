@@ -9,10 +9,23 @@ import Watchlist from './components/Watchlist';
 import Settings from './components/Settings';
 import AddTitleModal from './components/AddTitleModal';
 
+const migrateReviewers = (reviewersList) => {
+  if (!Array.isArray(reviewersList)) return reviewersList;
+  return reviewersList.map(rev => {
+    if (!rev.languages || !Array.isArray(rev.languages)) {
+      return {
+        ...rev,
+        languages: ["tamil", "telugu", "malayalam", "hindi"]
+      };
+    }
+    return rev;
+  });
+};
+
 export default function App() {
   // --- STATE ---
   const [shows, setShows] = useState(initialShows);
-  const [reviewers, setReviewers] = useState(initialReviewers);
+  const [reviewers, setReviewers] = useState(migrateReviewers(initialReviewers));
   const [watchlist, setWatchlist] = useState([]);
   const [watchedHistory, setWatchedHistory] = useState([]);
   const [theme, setTheme] = useState('amethyst');
@@ -38,7 +51,7 @@ export default function App() {
         const reviewersContent = await loadDataFile('reviewers.json');
         if (reviewersContent) {
           const parsed = JSON.parse(reviewersContent);
-          if (Array.isArray(parsed)) setReviewers(parsed);
+          if (Array.isArray(parsed)) setReviewers(migrateReviewers(parsed));
         } else {
           await saveDataFile('reviewers.json', JSON.stringify(initialReviewers, null, 2));
         }
@@ -135,7 +148,7 @@ export default function App() {
       const reviewersContent = await loadDataFile('reviewers.json');
       if (reviewersContent) {
         const parsed = JSON.parse(reviewersContent);
-        if (Array.isArray(parsed)) setReviewers(parsed);
+        if (Array.isArray(parsed)) setReviewers(migrateReviewers(parsed));
       } else {
         await saveDataFile('reviewers.json', JSON.stringify(reviewers, null, 2));
       }
@@ -237,6 +250,11 @@ export default function App() {
     setReviewers(prev => prev.filter(r => r.id !== reviewerId));
     triggerToast(`Deleted reviewer "${rev?.name}"`);
   };
+
+  const handleUpdateReviewer = (updatedReviewer) => {
+    setReviewers(prev => prev.map(r => r.id === updatedReviewer.id ? updatedReviewer : r));
+  };
+
 
   const handleAddShow = (newShow) => {
     // Sieve check
@@ -545,7 +563,7 @@ export default function App() {
 
   const handleResetAllData = () => {
     setShows(initialShows);
-    setReviewers(initialReviewers);
+    setReviewers(migrateReviewers(initialReviewers));
     setWatchlist([]);
     setWatchedHistory([]);
     localStorage.clear();
@@ -554,7 +572,7 @@ export default function App() {
 
   const handleImportData = (imported) => {
     if (imported.shows) setShows(imported.shows);
-    if (imported.reviewers) setReviewers(imported.reviewers);
+    if (imported.reviewers) setReviewers(migrateReviewers(imported.reviewers));
     if (imported.watchlist) setWatchlist(imported.watchlist);
     if (imported.watchedHistory) setWatchedHistory(imported.watchedHistory);
   };
@@ -1264,6 +1282,7 @@ export default function App() {
             reviewers={reviewers}
             onAddReviewer={handleAddReviewer}
             onDeleteReviewer={handleDeleteReviewer}
+            onUpdateReviewer={handleUpdateReviewer}
             onDeleteShow={handleDeleteShow}
             onRefreshShowRatings={handleRefreshShowRatings}
             onResetAllData={handleResetAllData}

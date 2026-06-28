@@ -6,6 +6,7 @@ export default function Settings({
   reviewers = [],
   onAddReviewer,
   onDeleteReviewer,
+  onUpdateReviewer,
   onDeleteShow,
   onRefreshShowRatings,
   onResetAllData,
@@ -18,6 +19,7 @@ export default function Settings({
 }) {
   // Add Reviewer state
   const [revName, setRevName] = useState('');
+  const [revLanguages, setRevLanguages] = useState([]);
 
   // Data folder local state
   const [folderInput, setFolderInput] = useState(dataFolder || '');
@@ -84,9 +86,24 @@ export default function Settings({
     onAddReviewer({
       id: `rev-${Date.now()}`,
       name: revName.trim().toLowerCase(),
-      urlPattern: `https://www.youtube.com/results?search_query=${encodeURIComponent(revName.trim().toLowerCase())}+{title}`
+      urlPattern: `https://www.youtube.com/results?search_query=${encodeURIComponent(revName.trim().toLowerCase())}+{title}`,
+      languages: revLanguages
     });
     setRevName('');
+    setRevLanguages([]);
+  };
+
+  const handleToggleLanguage = (reviewerId, language) => {
+    const rev = reviewers.find(r => r.id === reviewerId);
+    if (!rev) return;
+    const currentLangs = rev.languages || [];
+    let newLangs;
+    if (currentLangs.includes(language)) {
+      newLangs = currentLangs.filter(l => l !== language);
+    } else {
+      newLangs = [...currentLangs, language];
+    }
+    onUpdateReviewer({ ...rev, languages: newLangs });
   };
 
 
@@ -252,19 +269,49 @@ export default function Settings({
         
         <div className="channel-list">
           {reviewers.map((rev) => (
-            <div className="channel-item" key={rev.id}>
-              <div>
-                <span className="channel-name">{rev.name}</span>
-                <div className="channel-pattern">Search Query: "{rev.name} [title] review"</div>
+            <div className="channel-item" key={rev.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                <div>
+                  <span className="channel-name">{rev.name}</span>
+                  <div className="channel-pattern">Search Query: "{rev.name} [title] review"</div>
+                </div>
+                <button 
+                  id={`btn-del-reviewer-${rev.id}`}
+                  className="btn-icon"
+                  onClick={() => onDeleteReviewer(rev.id)}
+                  title={`Delete ${rev.name}`}
+                >
+                  <Trash size={14} style={{ color: 'var(--error)' }} />
+                </button>
               </div>
-              <button 
-                id={`btn-del-reviewer-${rev.id}`}
-                className="btn-icon"
-                onClick={() => onDeleteReviewer(rev.id)}
-                title={`Delete ${rev.name}`}
-              >
-                <Trash size={14} style={{ color: 'var(--error)' }} />
-              </button>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.5rem' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginRight: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Languages:</span>
+                {['Tamil', 'Telugu', 'Malayalam', 'Hindi', 'English'].map(lang => {
+                  const langLower = lang.toLowerCase();
+                  const isTagged = (rev.languages || []).map(l => l.toLowerCase()).includes(langLower);
+                  return (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => handleToggleLanguage(rev.id, langLower)}
+                      style={{
+                        fontSize: '0.75rem',
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        border: '1px solid',
+                        borderColor: isTagged ? 'var(--theme-primary, #9333ea)' : 'rgba(255, 255, 255, 0.15)',
+                        background: isTagged ? 'var(--theme-primary, #9333ea)' : 'transparent',
+                        color: isTagged ? 'white' : 'var(--text-muted)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        opacity: isTagged ? 1 : 0.6,
+                      }}
+                    >
+                      {lang}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           ))}
         </div>
@@ -290,6 +337,33 @@ export default function Settings({
           >
             <Plus size={16} /> Add Channel
           </button>
+          
+          <div className="form-group" style={{ gridColumn: 'span 3', marginTop: '0.5rem' }}>
+            <label className="form-label">Languages (Multiple allowed)</label>
+            <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginTop: '4px' }}>
+              {['Tamil', 'Telugu', 'Malayalam', 'Hindi', 'English'].map(lang => {
+                const langLower = lang.toLowerCase();
+                const isChecked = revLanguages.includes(langLower);
+                return (
+                  <label key={lang} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setRevLanguages(prev => [...prev, langLower]);
+                        } else {
+                          setRevLanguages(prev => prev.filter(l => l !== langLower));
+                        }
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    {lang}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
         </form>
       </div>
 
