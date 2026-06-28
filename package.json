@@ -1,7 +1,8 @@
 {
   "name": "flicksieve",
-  "private": true,
-  "version": "1.0.0",
+  "license": "MIT",
+  "author": "Muthu Venkatachalam",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +10,8 @@
     "preview": "vite preview",
     "sync-ratings": "node scripts/sync_ratings.js",
     "postinstall": "node scripts/setup_python.js",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "bump-version": "node scripts/bump_version.cjs"
   },
   "dependencies": {
     "@tauri-apps/plugin-opener": "^2.5.4",

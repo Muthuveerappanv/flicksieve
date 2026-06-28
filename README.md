@@ -97,4 +97,7 @@ Themes can be adjusted in the **Settings** view under **Appearance & Theme**. Th
 ---
 
 ## 📄 License
-This project is open-source and available under the MIT License.
+This project is open-source and licensed under the MIT License - see the [LICENSE](file:///Users/muthu/work/utilities/flicksieve/LICENSE) file for details.
+
+Copyright (c) 2026 Muthu Venkatachalam. All rights reserved.
+
