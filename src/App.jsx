@@ -304,74 +304,69 @@ export default function App() {
       let currentSlug = show.letterboxdSlug || null;
       let currentRtUrl = show.rottenTomatoesUrl || null;
 
-      // 1. Fetch IMDb rating & metadata
-      try {
-        const imdbData = await fetchImdbDetails(currentImdbId, show.title, currentYear);
-        if (imdbData) {
-          if (imdbData.imdbId) currentImdbId = imdbData.imdbId;
-          if (imdbData.rating !== null && imdbData.rating !== undefined) {
-            updatedRatings.imdb = imdbData.rating;
-          }
-          if (imdbData.overview && (!currentOverview || currentOverview === 'No overview available.')) {
-            currentOverview = imdbData.overview;
-          }
-          if (imdbData.posterUrl && !currentPosterUrl) {
-            currentPosterUrl = imdbData.posterUrl;
-          }
-          if (imdbData.genres && imdbData.genres.length > 0 && (!currentGenres || currentGenres.length === 0)) {
-            currentGenres = imdbData.genres;
-          }
-          if (imdbData.year && !currentYear) {
-            currentYear = imdbData.year;
-          }
+      // Run all 3 rating lookups concurrently in parallel
+      const [imdbResult, lbResult, rtResult] = await Promise.allSettled([
+        fetchImdbDetails(currentImdbId, show.title, currentYear),
+        fetchLetterboxd(show.title, currentYear, currentImdbId),
+        fetchRottenTomatoes(show.title, currentYear, show.type === 'tv')
+      ]);
+
+      // 1. Process IMDb details
+      if (imdbResult.status === 'fulfilled' && imdbResult.value) {
+        const imdbData = imdbResult.value;
+        if (imdbData.imdbId) currentImdbId = imdbData.imdbId;
+        if (imdbData.rating !== null && imdbData.rating !== undefined) {
+          updatedRatings.imdb = imdbData.rating;
         }
-      } catch (imdbErr) {
-        console.error(`IMDb details fetch error for ${show.title}:`, imdbErr);
+        if (imdbData.overview && (!currentOverview || currentOverview === 'No overview available.')) {
+          currentOverview = imdbData.overview;
+        }
+        if (imdbData.posterUrl && !currentPosterUrl) {
+          currentPosterUrl = imdbData.posterUrl;
+        }
+        if (imdbData.genres && imdbData.genres.length > 0 && (!currentGenres || currentGenres.length === 0)) {
+          currentGenres = imdbData.genres;
+        }
+        if (imdbData.year && !currentYear) {
+          currentYear = imdbData.year;
+        }
       }
 
-      // 2. Fetch Letterboxd rating & metadata
-      try {
-        const lbData = await fetchLetterboxd(show.title, currentYear, currentImdbId);
-        if (lbData && !lbData.error) {
-          if (lbData.rating) {
-            updatedRatings.letterboxd = parseFloat(lbData.rating);
-          }
-          if (lbData.slug) {
-            currentSlug = lbData.slug;
-          }
-          if (lbData.description && (!currentOverview || currentOverview === 'No overview available.')) {
-            currentOverview = lbData.description;
-          }
-          if (lbData.poster && !currentPosterUrl) {
-            currentPosterUrl = lbData.poster;
-          }
-          if (lbData.genres && lbData.genres.length > 0 && (!currentGenres || currentGenres.length === 0)) {
-            currentGenres = lbData.genres;
-          }
-          if (lbData.imdb_id && !currentImdbId) {
-            currentImdbId = lbData.imdb_id;
-          }
+      // 2. Process Letterboxd details
+      if (lbResult.status === 'fulfilled' && lbResult.value && !lbResult.value.error) {
+        const lbData = lbResult.value;
+        if (lbData.rating) {
+          updatedRatings.letterboxd = parseFloat(lbData.rating);
         }
-      } catch (err) {
-        console.error(`Letterboxd refresh error for ${show.title}:`, err);
+        if (lbData.slug) {
+          currentSlug = lbData.slug;
+        }
+        if (lbData.description && (!currentOverview || currentOverview === 'No overview available.')) {
+          currentOverview = lbData.description;
+        }
+        if (lbData.poster && !currentPosterUrl) {
+          currentPosterUrl = lbData.poster;
+        }
+        if (lbData.genres && lbData.genres.length > 0 && (!currentGenres || currentGenres.length === 0)) {
+          currentGenres = lbData.genres;
+        }
+        if (lbData.imdb_id && !currentImdbId) {
+          currentImdbId = lbData.imdb_id;
+        }
       }
 
-      // 2.5 Fetch Rotten Tomatoes rating
-      try {
-        const rtData = await fetchRottenTomatoes(show.title, currentYear, show.type === 'tv');
-        if (rtData && !rtData.error) {
-          if (rtData.criticScore !== undefined && rtData.criticScore !== null) {
-            updatedRatings.rottenTomatoes = parseInt(rtData.criticScore, 10);
-          }
-          if (rtData.audienceScore !== undefined && rtData.audienceScore !== null) {
-            updatedRatings.rottenTomatoesAudience = parseInt(rtData.audienceScore, 10);
-          }
-          if (rtData.url) {
-            currentRtUrl = rtData.url;
-          }
+      // 3. Process Rotten Tomatoes details
+      if (rtResult.status === 'fulfilled' && rtResult.value && !rtResult.value.error) {
+        const rtData = rtResult.value;
+        if (rtData.criticScore !== undefined && rtData.criticScore !== null) {
+          updatedRatings.rottenTomatoes = parseInt(rtData.criticScore, 10);
         }
-      } catch (err) {
-        console.error(`Rotten Tomatoes refresh error for ${show.title}:`, err);
+        if (rtData.audienceScore !== undefined && rtData.audienceScore !== null) {
+          updatedRatings.rottenTomatoesAudience = parseInt(rtData.audienceScore, 10);
+        }
+        if (rtData.url) {
+          currentRtUrl = rtData.url;
+        }
       }
 
       // 3. Update state

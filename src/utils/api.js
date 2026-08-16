@@ -73,50 +73,156 @@ export async function searchImdb(query) {
     return [];
   }
 }
+function formatOmdbData(data, resolvedImdbId, title, year) {
+  let ratingNum = null;
+  if (data.imdbRating && data.imdbRating !== 'N/A') {
+    const parsed = parseFloat(data.imdbRating);
+    if (!isNaN(parsed)) ratingNum = parsed;
+  }
+
+  return {
+    imdbId: data.imdbID || resolvedImdbId || null,
+    title: data.Title || title,
+    year: data.Year ? parseInt(data.Year, 10) : (year ? parseInt(year, 10) : null),
+    rating: ratingNum,
+    overview: data.Plot && data.Plot !== 'N/A' ? data.Plot : '',
+    genres: data.Genre && data.Genre !== 'N/A' ? data.Genre.split(',').map(g => g.trim()) : [],
+    language: data.Language && data.Language !== 'N/A' ? data.Language.split(',')[0].trim() : '',
+    posterUrl: data.Poster && data.Poster !== 'N/A' ? data.Poster : null,
+    releaseDate: data.Released && data.Released !== 'N/A' ? data.Released : null,
+    actors: data.Actors && data.Actors !== 'N/A' ? data.Actors : '',
+    director: data.Director && data.Director !== 'N/A' ? data.Director : '',
+    ratings: data.Ratings || []
+  };
+}
+
 /**
- * Fetches full IMDb & movie metadata (including IMDb rating, plot, genres, language, release date)
- * from OMDb API.
+ * Scrapes live real-time IMDb rating directly from IMDb title page.
+ */
+export async function fetchLiveImdbRating(imdbId) {
+  if (!imdbId || !imdbId.startsWith('tt')) return null;
+  try {
+    const res = await fetch(`https://r.jina.ai/https://www.imdb.com/title/${encodeURIComponent(imdbId)}/`);
+    if (!res.ok) return null;
+    const text = await res.text();
+
+    let rating = null;
+    const titleLineMatch = text.match(/Title:\s*(.*?)\n/);
+    if (titleLineMatch) {
+      const starMatch = titleLineMatch[1].match(/⭐\s*([0-9\.]+)/);
+      if (starMatch) rating = parseFloat(starMatch[1]);
+    }
+    if (!rating) {
+      const generalStarMatch = text.match(/⭐\s*([0-9\.]+)/);
+      if (generalStarMatch) rating = parseFloat(generalStarMatch[1]);
+    }
+
+    let genres = [];
+    if (titleLineMatch && titleLineMatch[1].includes('|')) {
+      const parts = titleLineMatch[1].split('|');
+      if (parts[1]) {
+        genres = parts[1].split(',').map(g => g.trim()).filter(Boolean);
+      }
+    }
+
+    return { rating, genres };
+  } catch (e) {
+    console.error('Error fetching live IMDb rating:', e);
+    return null;
+  }
+}
+
+/**
+ * Fetches full IMDb & movie metadata (including live IMDb rating, plot, genres, language, release date).
+ * Queries live IMDb directly for real-time rating accuracy, enriched with OMDb metadata.
  */
 export async function fetchImdbDetails(imdbId, title = '', year = '', apiKey = '') {
   const key = apiKey || 'trilogy';
   try {
-    let url = '';
-    if (imdbId && imdbId.startsWith('tt')) {
-      url = `https://www.omdbapi.com/?i=${encodeURIComponent(imdbId)}&apikey=${key}`;
-    } else if (title) {
-      const yearParam = year ? `&y=${encodeURIComponent(year)}` : '';
-      url = `https://www.omdbapi.com/?t=${encodeURIComponent(title)}${yearParam}&apikey=${key}`;
-    } else {
-      return null;
+    let resolvedImdbId = imdbId;
+
+    // If imdbId is not provided or not valid 'tt...', resolve it using searchImdb first
+    if (!resolvedImdbId || !resolvedImdbId.startsWith('tt')) {
+      if (title) {
+        const matches = await searchImdb(title);
+        if (matches && matches.length > 0) {
+          const cleanTitle = title.trim().toLowerCase();
+          const targetYear = year ? parseInt(year, 10) : null;
+          const bestMatch = matches.find(m => 
+            m.primaryTitle.toLowerCase() === cleanTitle &&
+            (!targetYear || !m.startYear || Math.abs(m.startYear - targetYear) <= 1)
+          ) || matches[0];
+          if (bestMatch && bestMatch.id) {
+            resolvedImdbId = bestMatch.id;
+          }
+        }
+      }
     }
 
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data.Response === 'False') return null;
+    // Run live IMDb scraper and OMDb fetcher in parallel
+    const [liveResult, omdbResult] = await Promise.allSettled([
+      resolvedImdbId ? fetchLiveImdbRating(resolvedImdbId) : Promise.resolve(null),
+      (async () => {
+        let url = '';
+        if (resolvedImdbId && resolvedImdbId.startsWith('tt')) {
+          url = `https://www.omdbapi.com/?i=${encodeURIComponent(resolvedImdbId)}&apikey=${key}`;
+        } else if (title) {
+          const yearParam = year ? `&y=${encodeURIComponent(year)}` : '';
+          url = `https://www.omdbapi.com/?t=${encodeURIComponent(title.trim())}${yearParam}&apikey=${key}`;
+        } else {
+          return null;
+        }
 
-    let ratingNum = null;
-    if (data.imdbRating && data.imdbRating !== 'N/A') {
-      const parsed = parseFloat(data.imdbRating);
-      if (!isNaN(parsed)) ratingNum = parsed;
-    }
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (data.Response === 'False') {
+          if (year && title) {
+            const fallbackRes = await fetch(`https://www.omdbapi.com/?t=${encodeURIComponent(title.trim())}&apikey=${key}`);
+            if (fallbackRes.ok) {
+              const fallbackData = await fallbackRes.json();
+              if (fallbackData.Response !== 'False') {
+                return formatOmdbData(fallbackData, resolvedImdbId, title, year);
+              }
+            }
+          }
+          return null;
+        }
+        return formatOmdbData(data, resolvedImdbId, title, year);
+      })()
+    ]);
 
-    return {
-      imdbId: data.imdbID || imdbId || null,
-      title: data.Title || title,
-      year: data.Year ? parseInt(data.Year, 10) : (year ? parseInt(year, 10) : null),
-      rating: ratingNum,
-      overview: data.Plot && data.Plot !== 'N/A' ? data.Plot : '',
-      genres: data.Genre && data.Genre !== 'N/A' ? data.Genre.split(',').map(g => g.trim()) : [],
-      language: data.Language && data.Language !== 'N/A' ? data.Language.split(',')[0].trim() : '',
-      posterUrl: data.Poster && data.Poster !== 'N/A' ? data.Poster : null,
-      releaseDate: data.Released && data.Released !== 'N/A' ? data.Released : null,
-      actors: data.Actors && data.Actors !== 'N/A' ? data.Actors : '',
-      director: data.Director && data.Director !== 'N/A' ? data.Director : '',
-      ratings: data.Ratings || []
+    const liveData = liveResult.status === 'fulfilled' ? liveResult.value : null;
+    const omdbData = omdbResult.status === 'fulfilled' ? omdbResult.value : null;
+
+    if (!liveData && !omdbData) return null;
+
+    const finalResult = omdbData || {
+      imdbId: resolvedImdbId,
+      title,
+      year: year ? parseInt(year, 10) : null,
+      rating: null,
+      overview: '',
+      genres: [],
+      language: '',
+      posterUrl: null,
+      releaseDate: null,
+      actors: '',
+      director: '',
+      ratings: []
     };
+
+    // If live IMDb returned a real-time rating, override the cached rating
+    if (liveData && liveData.rating !== null && liveData.rating !== undefined) {
+      finalResult.rating = liveData.rating;
+      if (liveData.genres && liveData.genres.length > 0 && (!finalResult.genres || finalResult.genres.length === 0)) {
+        finalResult.genres = liveData.genres;
+      }
+    }
+
+    return finalResult;
   } catch (e) {
-    console.error('Error fetching IMDb details via OMDb:', e);
+    console.error('Error in fetchImdbDetails:', e);
     return null;
   }
 }
