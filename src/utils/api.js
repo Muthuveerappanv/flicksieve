@@ -73,6 +73,53 @@ export async function searchImdb(query) {
     return [];
   }
 }
+/**
+ * Fetches full IMDb & movie metadata (including IMDb rating, plot, genres, language, release date)
+ * from OMDb API.
+ */
+export async function fetchImdbDetails(imdbId, title = '', year = '', apiKey = '') {
+  const key = apiKey || 'trilogy';
+  try {
+    let url = '';
+    if (imdbId && imdbId.startsWith('tt')) {
+      url = `https://www.omdbapi.com/?i=${encodeURIComponent(imdbId)}&apikey=${key}`;
+    } else if (title) {
+      const yearParam = year ? `&y=${encodeURIComponent(year)}` : '';
+      url = `https://www.omdbapi.com/?t=${encodeURIComponent(title)}${yearParam}&apikey=${key}`;
+    } else {
+      return null;
+    }
+
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.Response === 'False') return null;
+
+    let ratingNum = null;
+    if (data.imdbRating && data.imdbRating !== 'N/A') {
+      const parsed = parseFloat(data.imdbRating);
+      if (!isNaN(parsed)) ratingNum = parsed;
+    }
+
+    return {
+      imdbId: data.imdbID || imdbId || null,
+      title: data.Title || title,
+      year: data.Year ? parseInt(data.Year, 10) : (year ? parseInt(year, 10) : null),
+      rating: ratingNum,
+      overview: data.Plot && data.Plot !== 'N/A' ? data.Plot : '',
+      genres: data.Genre && data.Genre !== 'N/A' ? data.Genre.split(',').map(g => g.trim()) : [],
+      language: data.Language && data.Language !== 'N/A' ? data.Language.split(',')[0].trim() : '',
+      posterUrl: data.Poster && data.Poster !== 'N/A' ? data.Poster : null,
+      releaseDate: data.Released && data.Released !== 'N/A' ? data.Released : null,
+      actors: data.Actors && data.Actors !== 'N/A' ? data.Actors : '',
+      director: data.Director && data.Director !== 'N/A' ? data.Director : '',
+      ratings: data.Ratings || []
+    };
+  } catch (e) {
+    console.error('Error fetching IMDb details via OMDb:', e);
+    return null;
+  }
+}
 
 /**
  * Scrapes 91mobiles and enriches the results.

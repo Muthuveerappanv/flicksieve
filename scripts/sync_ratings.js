@@ -83,6 +83,25 @@ async function syncRatings() {
           }
         }
       }
+
+      if (imdbId) {
+        const omdbRes = await fetch(`https://www.omdbapi.com/?i=${encodeURIComponent(imdbId)}&apikey=trilogy`);
+        if (omdbRes.ok) {
+          const omdbData = await omdbRes.json();
+          if (omdbData.Response !== 'False') {
+            if (omdbData.imdbRating && omdbData.imdbRating !== 'N/A') {
+              const r = parseFloat(omdbData.imdbRating);
+              if (!isNaN(r)) {
+                show.ratings.imdb = r;
+                console.log(`  Updated IMDb rating: ${r}/10`);
+              }
+            }
+            if (!show.overview || show.overview === 'No overview available.') {
+              if (omdbData.Plot && omdbData.Plot !== 'N/A') show.overview = omdbData.Plot;
+            }
+          }
+        }
+      }
     } catch (err) {
       console.error(`  [IMDb error for "${show.title}"]:`, err.message);
     }
