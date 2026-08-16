@@ -2,7 +2,7 @@
   "name": "flicksieve",
   "license": "MIT",
   "author": "Muthu Venkatachalam",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
