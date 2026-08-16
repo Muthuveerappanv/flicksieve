@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Film, Tv, Trash, Plus, Search, AlertTriangle, X } from 'lucide-react';
-import { fetchLetterboxd, fetchRottenTomatoes } from '../utils/api';
+import { fetchLetterboxd, fetchRottenTomatoes, searchImdb } from '../utils/api';
 
 export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
   // Add Movie / TV Series Form State
@@ -38,13 +38,9 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
     setSearchError('');
     setSearchResults([]);
     try {
-      const res = await fetch(`https://api.imdbapi.dev/search/titles?query=${encodeURIComponent(searchQuery.trim())}`);
-      if (!res.ok) {
-        throw new Error('Failed to fetch search results from IMDb API');
-      }
-      const data = await res.json();
-      if (data.titles && data.titles.length > 0) {
-        setSearchResults(data.titles);
+      const matches = await searchImdb(searchQuery.trim());
+      if (matches && matches.length > 0) {
+        setSearchResults(matches);
       } else {
         setSearchError('No titles found on IMDb matching your search query.');
       }
@@ -70,8 +66,8 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
     if (year) {
       setShowYear(year);
     }
-    if (result.primaryImage?.url) {
-      setPosterUrl(result.primaryImage.url);
+    if (result.posterUrl || result.primaryImage?.url) {
+      setPosterUrl(result.posterUrl || result.primaryImage.url);
     }
     setImdbId(result.id || '');
     setLetterboxdSlug('');
@@ -82,50 +78,7 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
 
     setIsSearching(true);
 
-    // 1. Fetch full details from IMDb API
-    try {
-      const imdbDetailRes = await fetch(`https://api.imdbapi.dev/titles/${result.id}`);
-      if (imdbDetailRes.ok) {
-        const details = await imdbDetailRes.json();
-        
-        // Plot/overview
-        if (details.plot) {
-          setShowOverview(details.plot);
-        }
-        // Genres
-        if (details.genres && details.genres.length > 0) {
-          setShowGenres(details.genres.join(', '));
-        }
-        // Rating
-        if (details.rating?.aggregateRating) {
-          setRatingImdb(details.rating.aggregateRating.toString());
-        }
-        // Release date
-        if (details.releaseDate) {
-          setShowReleaseDate(details.releaseDate);
-        }
-        // Attempt to auto-detect language safely
-        if (details.spokenLanguages && details.spokenLanguages.length > 0 && details.spokenLanguages[0].name) {
-          const mainLang = details.spokenLanguages[0].name.toLowerCase();
-          if (mainLang === 'tamil') {
-            setShowLanguage('Tamil');
-          } else if (mainLang === 'malayalam') {
-            setShowLanguage('Malayalam');
-          } else if (mainLang === 'hindi') {
-            setShowLanguage('Hindi');
-          } else if (mainLang === 'english') {
-            setShowLanguage('English');
-          } else {
-            setShowLanguage('Other');
-            setCustomLanguage(details.spokenLanguages[0].name);
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching IMDb details:', err);
-    }
-
-    // 2. Fetch Letterboxd rating from local API
+    // 1. Fetch Letterboxd rating & details
     try {
       const lbData = await fetchLetterboxd(title, year, result.id);
       if (lbData && !lbData.error) {
@@ -135,15 +88,21 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
         if (lbData.slug) {
           setLetterboxdSlug(lbData.slug);
         }
-        if (lbData.poster && !result.primaryImage?.url) {
+        if (lbData.poster) {
           setPosterUrl(lbData.poster);
+        }
+        if (lbData.description) {
+          setShowOverview(lbData.description);
+        }
+        if (lbData.genres && lbData.genres.length > 0) {
+          setShowGenres(lbData.genres.join(', '));
         }
       }
     } catch (err) {
       console.error('Error fetching Letterboxd score:', err);
     }
 
-    // 3. Fetch Rotten Tomatoes rating from local API
+    // 2. Fetch Rotten Tomatoes rating from local API
     try {
       const rtData = await fetchRottenTomatoes(title, year, isTv);
       if (rtData && !rtData.error) {

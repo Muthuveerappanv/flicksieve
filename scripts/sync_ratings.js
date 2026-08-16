@@ -47,15 +47,24 @@ async function syncRatings() {
     let imdbId = show.imdbId || null;
     let letterboxdSlug = show.letterboxdSlug || null;
 
-    // --- STEP 1: IMDb Sync ---
+    // --- STEP 1: IMDb Search if missing ---
     try {
       if (!imdbId) {
         console.log(`  IMDb ID missing. Searching IMDb for "${show.title}"...`);
-        const searchRes = await fetch(`https://api.imdbapi.dev/search/titles?query=${encodeURIComponent(show.title)}`);
+        const cleanQuery = show.title.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const firstChar = cleanQuery.charAt(0) || 'a';
+        const searchRes = await fetch(`https://v3.sg.media-imdb.com/suggestion/${firstChar}/${encodeURIComponent(cleanQuery)}.json`);
         if (searchRes.ok) {
           const searchData = await searchRes.json();
-          const matches = searchData.titles || [];
-          // Find the best match comparing title and year
+          const matches = (searchData.d || [])
+            .filter(item => item.id && item.id.startsWith('tt'))
+            .map(item => ({
+              id: item.id,
+              primaryTitle: item.l || '',
+              startYear: item.y || null,
+              posterUrl: item.i ? item.i.imageUrl : null
+            }));
+
           const bestMatch = matches.find(m => 
             m.primaryTitle.toLowerCase() === show.title.toLowerCase() &&
             (!show.year || Math.abs(m.startYear - show.year) <= 1)
@@ -64,38 +73,13 @@ async function syncRatings() {
           if (bestMatch) {
             imdbId = bestMatch.id;
             show.imdbId = imdbId;
+            if (bestMatch.posterUrl && !show.posterUrl) {
+              show.posterUrl = bestMatch.posterUrl;
+            }
+            if (bestMatch.startYear && !show.year) {
+              show.year = bestMatch.startYear;
+            }
             console.log(`  Found IMDb ID: ${imdbId} (${bestMatch.primaryTitle})`);
-          }
-        }
-      }
-
-      if (imdbId) {
-        console.log(`  Fetching full details for IMDb ID: ${imdbId}...`);
-        const detailRes = await fetch(`https://api.imdbapi.dev/titles/${imdbId}`);
-        if (detailRes.ok) {
-          const details = await detailRes.json();
-          
-          // Update IMDb rating
-          if (details.rating && details.rating.aggregateRating) {
-            show.ratings.imdb = details.rating.aggregateRating;
-            console.log(`  Updated IMDb rating: ${details.rating.aggregateRating}/10`);
-          }
-
-          // Populate missing fields
-          if (!show.overview || show.overview === 'No overview available.') {
-            show.overview = details.plot || show.overview;
-          }
-          if (details.genres && details.genres.length > 0 && (!show.genres || show.genres.length === 0 || show.genres[0] === 'Drama')) {
-            show.genres = details.genres;
-          }
-          if (details.primaryImage && details.primaryImage.url && !show.posterUrl) {
-            show.posterUrl = details.primaryImage.url;
-          }
-          if (details.startYear) {
-            show.year = details.startYear;
-          }
-          if (details.releaseDate && !show.releaseDate) {
-            show.releaseDate = details.releaseDate;
           }
         }
       }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Compass, RotateCw, Calendar, Bookmark, Settings as SettingsIcon, Star, Filter, Heart, Search as SearchIcon, X, EyeOff } from 'lucide-react';
 import { initialShows, initialReviewers } from './data/shows';
-import { fetchLetterboxd, fetchRottenTomatoes, getDataFolder, setDataFolder, loadDataFile, saveDataFile } from './utils/api';
+import { fetchLetterboxd, fetchRottenTomatoes, searchImdb, getDataFolder, setDataFolder, loadDataFile, saveDataFile } from './utils/api';
 import ShowCard from './components/ShowCard';
 import DeciderWheel from './components/DeciderWheel';
 import OttTracker from './components/OttTracker';
@@ -304,32 +304,11 @@ export default function App() {
       let currentSlug = show.letterboxdSlug || null;
       let currentRtUrl = show.rottenTomatoesUrl || null;
 
-      // 1. Fetch IMDb details
-      if (currentImdbId) {
-        const imdbRes = await fetch(`https://api.imdbapi.dev/titles/${currentImdbId}`);
-        if (imdbRes.ok) {
-          const details = await imdbRes.json();
-          if (details.rating?.aggregateRating) {
-            updatedRatings.imdb = details.rating.aggregateRating;
-          }
-          currentOverview = details.plot || currentOverview;
-          if (details.genres && details.genres.length > 0) {
-            currentGenres = details.genres;
-          }
-          if (details.startYear) {
-            currentYear = details.startYear;
-          }
-          if (details.primaryImage?.url) {
-            currentPosterUrl = details.primaryImage.url;
-          }
-        }
-      } else {
-        // Fallback: search IMDb
-        const searchRes = await fetch(`https://api.imdbapi.dev/search/titles?query=${encodeURIComponent(show.title)}`);
-        if (searchRes.ok) {
-          const searchData = await searchRes.json();
-          const matches = searchData.titles || [];
-          if (matches.length > 0) {
+      // 1. Fetch IMDb search if IMDb ID is missing
+      if (!currentImdbId) {
+        try {
+          const matches = await searchImdb(show.title);
+          if (matches && matches.length > 0) {
             const bestMatch = matches.find(m => 
               m.primaryTitle.toLowerCase() === show.title.toLowerCase() &&
               (!show.year || Math.abs(m.startYear - show.year) <= 1)
@@ -337,26 +316,20 @@ export default function App() {
             
             if (bestMatch) {
               currentImdbId = bestMatch.id;
-              updatedRatings.imdb = bestMatch.rating?.aggregateRating || updatedRatings.imdb;
-              currentPosterUrl = bestMatch.primaryImage?.url || currentPosterUrl;
-              
-              const detailRes = await fetch(`https://api.imdbapi.dev/titles/${bestMatch.id}`);
-              if (detailRes.ok) {
-                const details = await detailRes.json();
-                currentOverview = details.plot || currentOverview;
-                if (details.genres && details.genres.length > 0) {
-                  currentGenres = details.genres;
-                }
-                if (details.startYear) {
-                  currentYear = details.startYear;
-                }
+              if (bestMatch.primaryImage?.url) {
+                currentPosterUrl = bestMatch.primaryImage.url;
+              }
+              if (bestMatch.startYear) {
+                currentYear = bestMatch.startYear;
               }
             }
           }
+        } catch (imdbErr) {
+          console.error(`IMDb lookup error for ${show.title}:`, imdbErr);
         }
       }
 
-      // 2. Fetch Letterboxd rating
+      // 2. Fetch Letterboxd rating & metadata
       try {
         const lbData = await fetchLetterboxd(show.title, currentYear, currentImdbId);
         if (lbData && !lbData.error) {
@@ -365,6 +338,18 @@ export default function App() {
           }
           if (lbData.slug) {
             currentSlug = lbData.slug;
+          }
+          if (lbData.description && (!currentOverview || currentOverview === 'No overview available.')) {
+            currentOverview = lbData.description;
+          }
+          if (lbData.poster && !currentPosterUrl) {
+            currentPosterUrl = lbData.poster;
+          }
+          if (lbData.genres && lbData.genres.length > 0 && (!currentGenres || currentGenres.length === 0)) {
+            currentGenres = lbData.genres;
+          }
+          if (lbData.imdb_id && !currentImdbId) {
+            currentImdbId = lbData.imdb_id;
           }
         }
       } catch (err) {
@@ -440,81 +425,56 @@ export default function App() {
       let currentGenres = importedShow.genres || [];
       let currentYear = importedShow.year || null;
 
-      // Self-healing: if IMDb details are missing, fetch them now from the client side!
+      // Search IMDb if IMDb ID is missing
       if (!currentImdbId) {
         try {
-          const searchRes = await fetch(`https://api.imdbapi.dev/search/titles?query=${encodeURIComponent(importedShow.title)}`);
-          if (searchRes.ok) {
-            const searchData = await searchRes.json();
-            const matches = searchData.titles || [];
-            let match = null;
-            if (matches.length > 0) {
-              const scrapedYear = importedShow.releaseDate ? parseInt(importedShow.releaseDate.split('-')[0], 10) : null;
-              const scrapedType = importedShow.type; // 'movie' or 'tv'
-              let highestScore = -1000;
+          const matches = await searchImdb(importedShow.title);
+          let match = null;
+          if (matches && matches.length > 0) {
+            const scrapedYear = importedShow.releaseDate ? parseInt(importedShow.releaseDate.split('-')[0], 10) : null;
+            const scrapedType = importedShow.type; // 'movie' or 'tv'
+            let highestScore = -1000;
+            
+            for (const m of matches) {
+              let score = 0;
               
-              for (const m of matches) {
-                let score = 0;
-                
-                // 1. Title match
-                const titleEqual = m.primaryTitle.toLowerCase() === importedShow.title.toLowerCase();
-                const titleContains = m.primaryTitle.toLowerCase().includes(importedShow.title.toLowerCase()) || 
-                                      importedShow.title.toLowerCase().includes(m.primaryTitle.toLowerCase());
-                
-                if (titleEqual) score += 100;
-                else if (titleContains) score += 30;
-                
-                // 2. Year match (+/- 1 year difference)
-                if (scrapedYear && m.startYear) {
-                  const yearDiff = Math.abs(m.startYear - scrapedYear);
-                  if (yearDiff === 0) score += 50;
-                  else if (yearDiff === 1) score += 20;
-                  else if (yearDiff > 2) score -= 40;
-                }
-                
-                // 3. Type match (movie vs series formats)
-                if (scrapedType === 'tv') {
-                  if (m.type === 'tvSeries' || m.type === 'tvMiniSeries' || m.type === 'tvSpecial') {
-                    score += 30;
-                  } else {
-                    score -= 30;
-                  }
-                } else {
-                  if (m.type === 'movie' || m.type === 'tvMovie' || m.type === 'short') {
-                    score += 30;
-                  } else {
-                    score -= 30;
-                  }
-                }
-                
-                // 4. Boost popular matches with rating votes
-                if (m.rating?.voteCount) {
-                  score += Math.min(Math.log10(m.rating.voteCount) * 2, 10);
-                }
-                
-                if (score > highestScore) {
-                  highestScore = score;
-                  match = m;
-                }
+              // 1. Title match
+              const titleEqual = m.primaryTitle.toLowerCase() === importedShow.title.toLowerCase();
+              const titleContains = m.primaryTitle.toLowerCase().includes(importedShow.title.toLowerCase()) || 
+                                    importedShow.title.toLowerCase().includes(m.primaryTitle.toLowerCase());
+              
+              if (titleEqual) score += 100;
+              else if (titleContains) score += 30;
+              
+              // 2. Year match
+              if (scrapedYear && m.startYear) {
+                const yearDiff = Math.abs(m.startYear - scrapedYear);
+                if (yearDiff === 0) score += 50;
+                else if (yearDiff === 1) score += 20;
+                else if (yearDiff > 2) score -= 40;
+              }
+              
+              // 3. Type match
+              if (scrapedType === 'tv') {
+                if (m.type === 'tvSeries') score += 30;
+                else score -= 30;
+              } else {
+                if (m.type === 'movie') score += 30;
+                else score -= 30;
+              }
+              
+              if (score > highestScore) {
+                highestScore = score;
+                match = m;
               }
             }
-            
-            if (match) {
-              currentImdbId = match.id;
-              currentImdbRating = match.rating?.aggregateRating || null;
-              currentPosterUrl = match.primaryImage?.url || null;
-
-              const detailRes = await fetch(`https://api.imdbapi.dev/titles/${match.id}`);
-              if (detailRes.ok) {
-                const details = await detailRes.json();
-                currentOverview = details.plot || '';
-                if (details.genres && details.genres.length > 0) {
-                  currentGenres = details.genres;
-                }
-                if (details.startYear) {
-                  currentYear = details.startYear;
-                }
-              }
+          }
+          
+          if (match) {
+            currentImdbId = match.id;
+            currentPosterUrl = match.posterUrl || currentPosterUrl;
+            if (match.startYear) {
+              currentYear = match.startYear;
             }
           }
         } catch (e) {

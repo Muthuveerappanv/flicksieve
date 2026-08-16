@@ -246,91 +246,52 @@ export default defineConfig({
                       return score;
                     };
 
-                    let searchRes = await fetch(`https://api.imdbapi.dev/search/titles?query=${encodeURIComponent(show.title)}`);
+                    const cleanQuery = show.title.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+                    const firstChar = cleanQuery.charAt(0) || 'a';
+                    let searchRes = await fetch(`https://v3.sg.media-imdb.com/suggestion/${firstChar}/${encodeURIComponent(cleanQuery)}.json`);
                     let matches = [];
                     if (searchRes.ok) {
                       const searchData = await searchRes.json();
-                      matches = searchData.titles || [];
+                      matches = (searchData.d || [])
+                        .filter(item => item.id && item.id.startsWith('tt'))
+                        .map(item => ({
+                          id: item.id,
+                          primaryTitle: item.l || '',
+                          title: item.l || '',
+                          startYear: item.y || (item.yr ? parseInt(item.yr.split('-')[0], 10) : null),
+                          type: item.qid === 'tvSeries' || item.qid === 'tvMiniSeries' ? 'tvSeries' : 'movie',
+                          posterUrl: item.i ? item.i.imageUrl : null,
+                        }));
                     }
 
-                    // Fallback Search: If search returns no results or only poor matches (initial score < 80)
-                    let highestInitialScore = matches.length > 0 ? Math.max(...matches.map(m => getInitialScore(m))) : -1000;
-                    if ((matches.length === 0 || highestInitialScore < 80) && scrapedYear) {
-                      const fallbackQuery = `${show.title} ${scrapedYear}`;
-                      try {
-                        const fallbackRes = await fetch(`https://api.imdbapi.dev/search/titles?query=${encodeURIComponent(fallbackQuery)}`);
-                        if (fallbackRes.ok) {
-                          const fallbackData = await fallbackRes.json();
-                          const fallbackMatches = fallbackData.titles || [];
-                          if (fallbackMatches.length > 0) {
-                            // If fallback search succeeded, evaluate these matches instead
-                            matches = fallbackMatches;
-                            highestInitialScore = Math.max(...matches.map(m => getInitialScore(m)));
-                          }
-                        }
-                      } catch (err) {
-                        console.error(`Fallback search failed for ${show.title} (${scrapedYear}):`, err.message);
-                      }
-                    }
-
-                    // Score refinement by fetching full details for top 3 candidates
                     let match = null;
                     if (matches.length > 0) {
-                      const candidates = matches
-                        .map(m => ({ match: m, initialScore: getInitialScore(m) }))
-                        .sort((a, b) => b.initialScore - a.initialScore)
-                        .slice(0, 3);
-                      
-                      let highestFinalScore = -1000;
-                      
-                      for (const cand of candidates) {
-                        const m = cand.match;
-                        let finalScore = cand.initialScore;
+                      let highestScore = -1000;
+                      for (const m of matches) {
+                        let score = 0;
+                        const titleEqual = m.primaryTitle.toLowerCase() === show.title.toLowerCase();
+                        const titleContains = m.primaryTitle.toLowerCase().includes(show.title.toLowerCase()) || 
+                                              show.title.toLowerCase().includes(m.primaryTitle.toLowerCase());
+                        if (titleEqual) score += 100;
+                        else if (titleContains) score += 30;
                         
-                        try {
-                          await new Promise(resolve => setTimeout(resolve, 50)); // paced delay between detail checks
-                          const detailRes = await fetch(`https://api.imdbapi.dev/titles/${m.id}`);
-                          if (detailRes.ok) {
-                            const details = await detailRes.json();
-                            m.details = details; // save details on match object
-                            
-                            // A. Spoken language comparison
-                            if (details.spokenLanguages && details.spokenLanguages.length > 0) {
-                              const spokenLangs = details.spokenLanguages.map(l => l.name.toLowerCase());
-                              const scrapedLang = (show.language || '').toLowerCase();
-                              if (spokenLangs.includes(scrapedLang)) {
-                                finalScore += 80;
-                              } else {
-                                finalScore -= 40;
-                              }
-                            }
-                            
-                            // B. Genre overlap comparison
-                            if (details.genres && details.genres.length > 0 && show.genres && show.genres.length > 0) {
-                              const detailGenres = details.genres.map(g => g.toLowerCase());
-                              const scrapedGenres = show.genres.map(g => g.toLowerCase());
-                              const overlapCount = scrapedGenres.filter(g => detailGenres.includes(g)).length;
-                              finalScore += overlapCount * 15;
-                            }
-                            
-                            // C. Exact year check
-                            if (scrapedYear && details.startYear) {
-                              if (details.startYear === scrapedYear) {
-                                finalScore += 20;
-                              }
-                            }
-                          }
-                        } catch (err) {
-                          console.error(`Failed to fetch details for candidate ${m.id}:`, err.message);
+                        if (scrapedYear && m.startYear) {
+                          const yearDiff = Math.abs(m.startYear - scrapedYear);
+                          if (yearDiff === 0) score += 50;
+                          else if (yearDiff === 1) score += 20;
+                          else if (yearDiff > 2) score -= 40;
                         }
                         
-                        // D. Popularity boost from vote count
-                        if (m.rating?.voteCount) {
-                          finalScore += Math.min(Math.log10(m.rating.voteCount) * 2, 10);
+                        if (scrapedType === 'tv') {
+                          if (m.type === 'tvSeries') score += 30;
+                          else score -= 30;
+                        } else {
+                          if (m.type === 'movie') score += 30;
+                          else score -= 30;
                         }
                         
-                        if (finalScore > highestFinalScore) {
-                          highestFinalScore = finalScore;
+                        if (score > highestScore) {
+                          highestScore = score;
                           match = m;
                         }
                       }
@@ -338,26 +299,9 @@ export default defineConfig({
 
                     if (match) {
                       show.imdbId = match.id;
-                      show.ratings.imdb = match.rating?.aggregateRating || null;
-                      show.posterUrl = match.primaryImage?.url || null;
-                      
-                      const details = match.details;
-                      if (details) {
-                        show.overview = details.plot || '';
-                        if (details.genres && details.genres.length > 0) {
-                          show.genres = details.genres;
-                        }
-                        if (details.startYear) {
-                          show.year = details.startYear;
-                        }
-                        if (details.spokenLanguages && details.spokenLanguages.length > 0) {
-                          const mainLang = details.spokenLanguages[0].name;
-                          if (['tamil', 'malayalam', 'hindi', 'english'].includes(mainLang.toLowerCase())) {
-                            show.language = mainLang.charAt(0).toUpperCase() + mainLang.slice(1);
-                          } else {
-                            show.language = mainLang;
-                          }
-                        }
+                      show.posterUrl = match.posterUrl || show.posterUrl;
+                      if (match.startYear) {
+                        show.year = match.startYear;
                       }
                     }
                   } catch (e) {
