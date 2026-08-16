@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Compass, RotateCw, Calendar, Bookmark, Settings as SettingsIcon, Star, Filter, Heart, Search as SearchIcon, X, EyeOff } from 'lucide-react';
 import { initialShows, initialReviewers } from './data/shows';
-import { fetchLetterboxd, fetchRottenTomatoes, searchImdb, getDataFolder, setDataFolder, loadDataFile, saveDataFile } from './utils/api';
+import { fetchLetterboxd, fetchRottenTomatoes, searchImdb, fetchImdbDetails, getDataFolder, setDataFolder, loadDataFile, saveDataFile } from './utils/api';
 import ShowCard from './components/ShowCard';
 import DeciderWheel from './components/DeciderWheel';
 import OttTracker from './components/OttTracker';
@@ -304,29 +304,29 @@ export default function App() {
       let currentSlug = show.letterboxdSlug || null;
       let currentRtUrl = show.rottenTomatoesUrl || null;
 
-      // 1. Fetch IMDb search if IMDb ID is missing
-      if (!currentImdbId) {
-        try {
-          const matches = await searchImdb(show.title);
-          if (matches && matches.length > 0) {
-            const bestMatch = matches.find(m => 
-              m.primaryTitle.toLowerCase() === show.title.toLowerCase() &&
-              (!show.year || Math.abs(m.startYear - show.year) <= 1)
-            ) || matches[0];
-            
-            if (bestMatch) {
-              currentImdbId = bestMatch.id;
-              if (bestMatch.primaryImage?.url) {
-                currentPosterUrl = bestMatch.primaryImage.url;
-              }
-              if (bestMatch.startYear) {
-                currentYear = bestMatch.startYear;
-              }
-            }
+      // 1. Fetch IMDb rating & metadata
+      try {
+        const imdbData = await fetchImdbDetails(currentImdbId, show.title, currentYear);
+        if (imdbData) {
+          if (imdbData.imdbId) currentImdbId = imdbData.imdbId;
+          if (imdbData.rating !== null && imdbData.rating !== undefined) {
+            updatedRatings.imdb = imdbData.rating;
           }
-        } catch (imdbErr) {
-          console.error(`IMDb lookup error for ${show.title}:`, imdbErr);
+          if (imdbData.overview && (!currentOverview || currentOverview === 'No overview available.')) {
+            currentOverview = imdbData.overview;
+          }
+          if (imdbData.posterUrl && !currentPosterUrl) {
+            currentPosterUrl = imdbData.posterUrl;
+          }
+          if (imdbData.genres && imdbData.genres.length > 0 && (!currentGenres || currentGenres.length === 0)) {
+            currentGenres = imdbData.genres;
+          }
+          if (imdbData.year && !currentYear) {
+            currentYear = imdbData.year;
+          }
         }
+      } catch (imdbErr) {
+        console.error(`IMDb details fetch error for ${show.title}:`, imdbErr);
       }
 
       // 2. Fetch Letterboxd rating & metadata
@@ -425,61 +425,19 @@ export default function App() {
       let currentGenres = importedShow.genres || [];
       let currentYear = importedShow.year || null;
 
-      // Search IMDb if IMDb ID is missing
-      if (!currentImdbId) {
-        try {
-          const matches = await searchImdb(importedShow.title);
-          let match = null;
-          if (matches && matches.length > 0) {
-            const scrapedYear = importedShow.releaseDate ? parseInt(importedShow.releaseDate.split('-')[0], 10) : null;
-            const scrapedType = importedShow.type; // 'movie' or 'tv'
-            let highestScore = -1000;
-            
-            for (const m of matches) {
-              let score = 0;
-              
-              // 1. Title match
-              const titleEqual = m.primaryTitle.toLowerCase() === importedShow.title.toLowerCase();
-              const titleContains = m.primaryTitle.toLowerCase().includes(importedShow.title.toLowerCase()) || 
-                                    importedShow.title.toLowerCase().includes(m.primaryTitle.toLowerCase());
-              
-              if (titleEqual) score += 100;
-              else if (titleContains) score += 30;
-              
-              // 2. Year match
-              if (scrapedYear && m.startYear) {
-                const yearDiff = Math.abs(m.startYear - scrapedYear);
-                if (yearDiff === 0) score += 50;
-                else if (yearDiff === 1) score += 20;
-                else if (yearDiff > 2) score -= 40;
-              }
-              
-              // 3. Type match
-              if (scrapedType === 'tv') {
-                if (m.type === 'tvSeries') score += 30;
-                else score -= 30;
-              } else {
-                if (m.type === 'movie') score += 30;
-                else score -= 30;
-              }
-              
-              if (score > highestScore) {
-                highestScore = score;
-                match = m;
-              }
-            }
-          }
-          
-          if (match) {
-            currentImdbId = match.id;
-            currentPosterUrl = match.posterUrl || currentPosterUrl;
-            if (match.startYear) {
-              currentYear = match.startYear;
-            }
-          }
-        } catch (e) {
-          console.error(`Error background-resolving IMDb for ${importedShow.title}:`, e);
+      // Fetch IMDb details & rating
+      try {
+        const imdbData = await fetchImdbDetails(currentImdbId, importedShow.title, importedShow.year);
+        if (imdbData) {
+          if (imdbData.imdbId) currentImdbId = imdbData.imdbId;
+          if (imdbData.rating) currentImdbRating = imdbData.rating;
+          if (imdbData.overview) currentOverview = imdbData.overview;
+          if (imdbData.posterUrl) currentPosterUrl = imdbData.posterUrl;
+          if (imdbData.genres && imdbData.genres.length > 0) currentGenres = imdbData.genres;
+          if (imdbData.year) currentYear = imdbData.year;
         }
+      } catch (e) {
+        console.error(`Error background-resolving IMDb for ${importedShow.title}:`, e);
       }
 
       // Fetch Letterboxd rating

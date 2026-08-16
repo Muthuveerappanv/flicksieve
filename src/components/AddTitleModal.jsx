@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Film, Tv, Trash, Plus, Search, AlertTriangle, X } from 'lucide-react';
-import { fetchLetterboxd, fetchRottenTomatoes, searchImdb } from '../utils/api';
+import { fetchLetterboxd, fetchRottenTomatoes, searchImdb, fetchImdbDetails } from '../utils/api';
 
 export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
   // Add Movie / TV Series Form State
@@ -71,6 +71,7 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
     }
     setImdbId(result.id || '');
     setLetterboxdSlug('');
+    setRatingImdb('');
     setRatingLboxd('');
     setRatingRT('');
     setRatingRTAudience('');
@@ -78,7 +79,40 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
 
     setIsSearching(true);
 
-    // 1. Fetch Letterboxd rating & details
+    // 1. Fetch IMDb details & rating
+    try {
+      const imdbData = await fetchImdbDetails(result.id, title, year);
+      if (imdbData) {
+        if (imdbData.rating) {
+          setRatingImdb(imdbData.rating.toString());
+        }
+        if (imdbData.overview) {
+          setShowOverview(imdbData.overview);
+        }
+        if (imdbData.genres && imdbData.genres.length > 0) {
+          setShowGenres(imdbData.genres.join(', '));
+        }
+        if (imdbData.releaseDate) {
+          setShowReleaseDate(imdbData.releaseDate);
+        }
+        if (imdbData.posterUrl && !result.posterUrl && !result.primaryImage?.url) {
+          setPosterUrl(imdbData.posterUrl);
+        }
+        if (imdbData.language) {
+          const l = imdbData.language.toLowerCase();
+          if (['tamil', 'malayalam', 'hindi', 'english', 'telugu', 'korean', 'japanese'].includes(l)) {
+            setShowLanguage(l.charAt(0).toUpperCase() + l.slice(1));
+          } else {
+            setShowLanguage('Other');
+            setCustomLanguage(imdbData.language);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching IMDb details:', err);
+    }
+
+    // 2. Fetch Letterboxd rating & details
     try {
       const lbData = await fetchLetterboxd(title, year, result.id);
       if (lbData && !lbData.error) {
@@ -91,10 +125,10 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
         if (lbData.poster) {
           setPosterUrl(lbData.poster);
         }
-        if (lbData.description) {
+        if (lbData.description && !showOverview) {
           setShowOverview(lbData.description);
         }
-        if (lbData.genres && lbData.genres.length > 0) {
+        if (lbData.genres && lbData.genres.length > 0 && !showGenres) {
           setShowGenres(lbData.genres.join(', '));
         }
       }
