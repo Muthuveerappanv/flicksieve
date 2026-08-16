@@ -215,7 +215,7 @@ export default function ShowCard({
         {/* Ratings Section */}
         <section className="ratings-section">
           <div className="ratings-grid">
-            {ratings.imdb && (
+            {(ratings.imdb || imdbId) && (
               <a 
                 href={imdbId ? `https://www.imdb.com/title/${imdbId}` : `https://www.imdb.com/find?q=${encodeURIComponent(title)}`}
                 target="_blank"
@@ -226,8 +226,8 @@ export default function ShowCard({
               >
                 <span className="rating-source-label">IMDb</span>
                 <span className="rating-value">
-                  <Star size={12} fill="currentColor" />
-                  {ratings.imdb}/10
+                  <Star size={12} fill={ratings.imdb ? "currentColor" : "none"} />
+                  {ratings.imdb ? `${ratings.imdb}/10` : 'Unrated'}
                 </span>
               </a>
             )}

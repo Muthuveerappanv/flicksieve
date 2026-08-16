@@ -77,20 +77,30 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
     setRatingRTAudience('');
     setRottenTomatoesUrl('');
 
-    setIsSearching(true);
-
-    // 1. Fetch IMDb details & rating
+    // Run all 3 rating lookups concurrently in parallel
     try {
-      const imdbData = await fetchImdbDetails(result.id, title, year);
-      if (imdbData) {
+      const [imdbRes, lbRes, rtRes] = await Promise.allSettled([
+        fetchImdbDetails(result.id, title, year),
+        fetchLetterboxd(title, year, result.id),
+        fetchRottenTomatoes(title, year, isTv)
+      ]);
+
+      let overviewText = '';
+      let genresText = '';
+
+      // 1. Process IMDb details
+      if (imdbRes.status === 'fulfilled' && imdbRes.value) {
+        const imdbData = imdbRes.value;
         if (imdbData.rating) {
           setRatingImdb(imdbData.rating.toString());
         }
         if (imdbData.overview) {
+          overviewText = imdbData.overview;
           setShowOverview(imdbData.overview);
         }
         if (imdbData.genres && imdbData.genres.length > 0) {
-          setShowGenres(imdbData.genres.join(', '));
+          genresText = imdbData.genres.join(', ');
+          setShowGenres(genresText);
         }
         if (imdbData.releaseDate) {
           setShowReleaseDate(imdbData.releaseDate);
@@ -108,14 +118,10 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
           }
         }
       }
-    } catch (err) {
-      console.error('Error fetching IMDb details:', err);
-    }
 
-    // 2. Fetch Letterboxd rating & details
-    try {
-      const lbData = await fetchLetterboxd(title, year, result.id);
-      if (lbData && !lbData.error) {
+      // 2. Process Letterboxd details
+      if (lbRes.status === 'fulfilled' && lbRes.value && !lbRes.value.error) {
+        const lbData = lbRes.value;
         if (lbData.rating) {
           setRatingLboxd(lbData.rating.toString());
         }
@@ -125,21 +131,17 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
         if (lbData.poster) {
           setPosterUrl(lbData.poster);
         }
-        if (lbData.description && !showOverview) {
+        if (lbData.description && !overviewText) {
           setShowOverview(lbData.description);
         }
-        if (lbData.genres && lbData.genres.length > 0 && !showGenres) {
+        if (lbData.genres && lbData.genres.length > 0 && !genresText) {
           setShowGenres(lbData.genres.join(', '));
         }
       }
-    } catch (err) {
-      console.error('Error fetching Letterboxd score:', err);
-    }
 
-    // 2. Fetch Rotten Tomatoes rating from local API
-    try {
-      const rtData = await fetchRottenTomatoes(title, year, isTv);
-      if (rtData && !rtData.error) {
+      // 3. Process Rotten Tomatoes details
+      if (rtRes.status === 'fulfilled' && rtRes.value && !rtRes.value.error) {
+        const rtData = rtRes.value;
         if (rtData.criticScore !== undefined && rtData.criticScore !== null) {
           setRatingRT(rtData.criticScore.toString());
         }
@@ -151,7 +153,7 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
         }
       }
     } catch (err) {
-      console.error('Error fetching Rotten Tomatoes score:', err);
+      console.error('Error fetching title details:', err);
     }
 
     setIsSearching(false);
