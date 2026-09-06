@@ -897,16 +897,42 @@ def enrich_all(films, workers=5):
         return list(pool.map(enrich_film, films))
 
 
+def _reviewers_json_candidates():
+    """Ordered locations to look for reviewers.json.
+
+    A packaged app has no ``../src/data`` tree, so try: an explicit override env
+    var, next to this script (Tauri bundles it into the resource dir alongside
+    the scripts), the resource dir itself, and finally the dev-tree location.
+    """
+    import os
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = []
+    env = os.environ.get("FLICKSIEVE_REVIEWERS")
+    if env:
+        candidates.append(env)
+    candidates.extend([
+        os.path.join(here, "reviewers.json"),
+        os.path.join(here, "..", "reviewers.json"),
+        os.path.join(here, "..", "src", "data", "reviewers.json"),
+    ])
+    res_dir = os.environ.get("FLICKSIEVE_RESOURCE_DIR") or os.environ.get("RESOURCE_DIR")
+    if res_dir:
+        candidates.append(os.path.join(res_dir, "reviewers.json"))
+    return candidates
+
+
 def load_handles():
     """Read trusted YouTube handles from the user's reviewers.json."""
-    import os
-    path = os.path.join(os.path.dirname(__file__), "..", "src", "data", "reviewers.json")
-    try:
-        with open(path, encoding="utf-8") as fh:
-            return [r["youtubeHandle"] for r in json.load(fh)
-                    if r.get("youtubeHandle") and r.get("trusted", True)]
-    except Exception:
-        return ["@TamilTalkies", "@Filmicraft", "@unnivlogs"]
+    for path in _reviewers_json_candidates():
+        try:
+            with open(path, encoding="utf-8") as fh:
+                handles = [r["youtubeHandle"] for r in json.load(fh)
+                           if r.get("youtubeHandle") and r.get("trusted", True)]
+            if handles:
+                return handles
+        except Exception:
+            continue
+    return ["@TamilTalkies", "@Filmicraft", "@unnivlogs"]
 
 
 def discover(window_days=90, languages=None, min_critics=1, min_rating=None,

@@ -1,37 +1,67 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { fetchDiscoverIndian } from './api.js';
 
-function buildParams({
-  windowDays = 90, languages = [], minRating = null,
-  minCritics = 1, includeYoutube = false,
-} = {}) {
-  const langParam = Array.isArray(languages) ? languages.join(',') : String(languages || '');
-  const ratingParam = minRating === null || minRating === '' ? '' : String(minRating);
-  return new URLSearchParams({
-    window_days: String(windowDays),
-    languages: langParam,
-    min_rating: ratingParam,
-    min_critics: String(minCritics),
-    include_youtube: String(includeYoutube),
-  }).toString();
+// fetchDiscoverIndian hits the dev-server proxy (/api/discover-indian) whenever
+// it is not running inside Tauri, which is the case under vitest. Stub fetch and
+// assert on the URL it builds so a regression in the query-string contract fails
+// here rather than silently at runtime.
+function stubFetch() {
+  const spy = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ films: [], count: 0 }),
+  });
+  global.fetch = spy;
+  return spy;
 }
 
-test('defaults to a 3 month window', () => {
-  assert.match(buildParams(), /window_days=90/);
+function queryOf(spy) {
+  const url = new URL(spy.mock.calls[0][0], 'http://localhost');
+  return url.searchParams;
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
-test('supports the 6 month window', () => {
-  assert.match(buildParams({ windowDays: 180 }), /window_days=180/);
-});
+describe('fetchDiscoverIndian query params', () => {
+  it('defaults to a 3 month window', async () => {
+    const spy = stubFetch();
+    await fetchDiscoverIndian();
+    expect(queryOf(spy).get('window_days')).toBe('90');
+  });
 
-test('languages are comma joined', () => {
-  assert.match(buildParams({ languages: ['Telugu', 'Hindi'] }), /languages=Telugu%2CHindi/);
-});
+  it('supports the 6 month window', async () => {
+    const spy = stubFetch();
+    await fetchDiscoverIndian({ windowDays: 180 });
+    expect(queryOf(spy).get('window_days')).toBe('180');
+  });
 
-test('minimum rating is passed through', () => {
-  assert.match(buildParams({ minRating: 3.5 }), /min_rating=3\.5/);
-});
+  it('comma-joins languages', async () => {
+    const spy = stubFetch();
+    await fetchDiscoverIndian({ languages: ['Telugu', 'Hindi'] });
+    expect(queryOf(spy).get('languages')).toBe('Telugu,Hindi');
+  });
 
-test('youtube is off by default', () => {
-  assert.match(buildParams(), /include_youtube=false/);
+  it('passes the minimum rating through', async () => {
+    const spy = stubFetch();
+    await fetchDiscoverIndian({ minRating: 3.5 });
+    expect(queryOf(spy).get('min_rating')).toBe('3.5');
+  });
+
+  it('omits the minimum rating when null', async () => {
+    const spy = stubFetch();
+    await fetchDiscoverIndian({ minRating: null });
+    expect(queryOf(spy).get('min_rating')).toBe('');
+  });
+
+  it('keeps YouTube off by default', async () => {
+    const spy = stubFetch();
+    await fetchDiscoverIndian();
+    expect(queryOf(spy).get('include_youtube')).toBe('false');
+  });
+
+  it('throws on a non-ok response', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 });
+    await expect(fetchDiscoverIndian()).rejects.toThrow(/500/);
+  });
 });

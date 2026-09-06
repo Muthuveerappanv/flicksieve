@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
+import { ToastProvider } from './context/ToastContext.jsx'
 import './index.css'
 import { isTauri, openExternalUrl } from './utils/api.js'
 
@@ -61,11 +62,11 @@ class ErrorBoundary extends React.Component {
           <pre style={{ backgroundColor: '#12131a', padding: '1.5rem', borderRadius: '8px', border: '1px solid #242636', overflowX: 'auto', color: '#9ca3af', fontSize: '0.8rem', whiteSpace: 'pre-wrap' }}>
             {this.state.error && this.state.error.stack}
           </pre>
-          <button 
-            onClick={() => { localStorage.clear(); window.location.reload(); }}
+          <button
+            onClick={() => window.location.reload()}
             style={{ marginTop: '1.5rem', padding: '0.75rem 1.5rem', backgroundColor: '#8b5cf6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
           >
-            Clear Local Storage & Reload
+            Reload
           </button>
         </div>
       );
@@ -78,7 +79,9 @@ class ErrorBoundary extends React.Component {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <App />
+      <ToastProvider>
+        <App />
+      </ToastProvider>
     </ErrorBoundary>
   </React.StrictMode>,
 )

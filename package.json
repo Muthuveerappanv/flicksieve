@@ -2,12 +2,16 @@
   "name": "flicksieve",
   "license": "MIT",
   "author": "Muthu Venkatachalam",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:py": ".venv/bin/python3 -m unittest discover -s scripts -p 'test_*.py'",
     "sync-ratings": "node scripts/sync_ratings.js",
     "discover": "node scripts/discover_at_home.js",
     "discover-indian": "node -e \"const{execFileSync}=require('child_process');process.stdout.write(execFileSync('.venv/bin/python3',['scripts/discover_indian.py',...process.argv.slice(1)],{maxBuffer:20*1024*1024}))\" --",
@@ -16,15 +20,21 @@
     "bump-version": "node scripts/bump_version.cjs"
   },
   "dependencies": {
-    "@tauri-apps/plugin-opener": "^2.5.4",
-    "lucide-react": "^0.378.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "@tauri-apps/plugin-opener": "^2.5.5",
+    "lucide-react": "^1.41.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@tauri-apps/api": "^2.11.0",
-    "@tauri-apps/cli": "^2.11.2",
-    "@vitejs/plugin-react": "^4.3.1",
-    "vite": "^5.3.1"
+    "@eslint/js": "^10.0.1",
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/cli": "^2.11.4",
+    "@vitejs/plugin-react": "^6.1.1",
+    "eslint": "^10.10.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
+    "jsdom": "^29.1.1",
+    "vite": "^8.2.2",
+    "vitest": "^5.0.0"
   }
 }

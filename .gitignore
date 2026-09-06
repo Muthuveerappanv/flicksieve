@@ -30,3 +30,15 @@ __pycache__/
 
 # Local logs
 *.log
+
+# discover_at_home.js output
+.discover-at-home.json
+
+# Local scratch experiments (kept on disk, not versioned)
+scratch/
+
+# Hermes planning notes
+.hermes/
+
+# Claude Code worktrees & local state
+.claude/

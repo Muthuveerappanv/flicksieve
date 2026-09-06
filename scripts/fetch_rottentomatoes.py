@@ -1,6 +1,9 @@
 import sys
 import json
+import re
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor
+
 import requests
 from bs4 import BeautifulSoup
 
@@ -64,6 +67,7 @@ def fetch_rottentomatoes_score(query, year=None, is_tv=False):
         else:
             row_year = best_row.get('release-year') or best_row.get('releaseyear')
             
+        seasons_list = []
         # 2. Try to fetch the detail page to get both critic and audience scores
         if href:
             detail_url = href
@@ -71,7 +75,7 @@ def fetch_rottentomatoes_score(query, year=None, is_tv=False):
                 detail_url = "https://www.rottentomatoes.com" + detail_url
                 
             try:
-                detail_res = requests.get(detail_url, headers=headers, timeout=5)
+                detail_res = requests.get(detail_url, headers=headers, timeout=6)
                 if detail_res.status_code == 200:
                     detail_soup = BeautifulSoup(detail_res.text, 'html.parser')
                     script_tag = detail_soup.find('script', id='media-scorecard-json', type='application/json')
@@ -89,16 +93,78 @@ def fetch_rottentomatoes_score(query, year=None, is_tv=False):
                             ascore = audience_data['score']
                             if ascore and ascore.strip():
                                 audience_score = int(ascore)
+
+                    # Extract season tiles if is_tv
+                    if is_tv:
+                        tiles = detail_soup.find_all('tile-season')
+                        raw_seasons = []
+                        for t in tiles:
+                            title_el = t.find(attrs={'slot': 'title'})
+                            critics_el = t.find(attrs={'slot': 'critics-score'})
+                            air_el = t.find(attrs={'slot': 'air-date'})
+                            s_href = t.get('href', '')
+                            s_title = title_el.get_text(strip=True) if title_el else ''
+                            s_critic = None
+                            if critics_el:
+                                raw_c = critics_el.get_text(strip=True).rstrip('%')
+                                if raw_c.isdigit():
+                                    s_critic = int(raw_c)
+                            s_air = air_el.get_text(strip=True) if air_el else None
+
+                            raw_seasons.append({
+                                "season": s_title,
+                                "href": s_href,
+                                "criticScore": s_critic,
+                                "audienceScore": None,
+                                "airDate": s_air
+                            })
+
+                        # Fetch audience scores for each season in parallel
+                        if raw_seasons:
+                            def _fetch_season_aud(s):
+                                if not s.get('href'):
+                                    return s
+                                try:
+                                    s_url = s['href']
+                                    if s_url.startswith('/'):
+                                        s_url = "https://www.rottentomatoes.com" + s_url
+                                    r = requests.get(s_url, headers=headers, timeout=4)
+                                    if r.status_code == 200:
+                                        sp = BeautifulSoup(r.text, 'html.parser')
+                                        sc = sp.find('script', id='media-scorecard-json')
+                                        if sc:
+                                            sd = json.loads(sc.string)
+                                            aud = sd.get('audienceScore', {}).get('score')
+                                            crit = sd.get('criticsScore', {}).get('score')
+                                            if aud and str(aud).strip().isdigit():
+                                                s['audienceScore'] = int(aud)
+                                            if crit and str(crit).strip().isdigit():
+                                                s['criticScore'] = int(crit)
+                                except Exception:
+                                    pass
+                                return s
+
+                            with ThreadPoolExecutor(max_workers=min(len(raw_seasons), 6)) as pool:
+                                seasons_list = list(pool.map(_fetch_season_aud, raw_seasons))
+
+                            # Sort seasons numerically (Season 1, Season 2, etc.)
+                            def _season_sort_key(item):
+                                m = re.search(r'\d+', item.get('season', ''))
+                                return int(m.group(0)) if m else 999
+                            seasons_list.sort(key=_season_sort_key)
             except Exception:
                 pass # Fall back to search row values if detail fetch fails
                 
-        return {
+        result = {
             "title": title,
             "year": row_year,
             "criticScore": critic_score,
             "audienceScore": audience_score,
             "url": href
         }
+        if is_tv and seasons_list:
+            result["seasons"] = seasons_list
+        return result
         
     except Exception as e:
         return {"error": str(e)}

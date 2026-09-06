@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { Youtube, Plus, Trash, Film, Tv, Download, Upload, RotateCcw, RotateCw, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Download, Upload, RotateCcw, RotateCw, AlertTriangle } from 'lucide-react';
+import { formatSieveScore } from '../utils/score.js';
 
 export default function Settings({
   shows = [],
@@ -177,6 +178,10 @@ export default function Settings({
           Personalize the look and feel of your FlickSieve dashboard by choosing a curated color theme.
         </p>
 
+        {/* NOTE: each swatch's inline --theme-primary / --theme-secondary mirror the
+            accent hex pairs in the [data-theme=...] blocks in index.css. They are
+            intentionally hardcoded so a swatch shows its own theme colour regardless
+            of the active theme — keep the two in sync when editing a palette. */}
         <div className="theme-grid">
           <button 
             type="button"
@@ -281,7 +286,7 @@ export default function Settings({
                   onClick={() => onDeleteReviewer(rev.id)}
                   title={`Delete ${rev.name}`}
                 >
-                  <Trash size={14} style={{ color: 'var(--error)' }} />
+                  <Trash2 size={14} style={{ color: 'var(--error)' }} />
                 </button>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.5rem' }}>
@@ -374,6 +379,18 @@ export default function Settings({
           Search and delete movies or TV series from the database (even if sieved out of active recommendations).
         </p>
 
+        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem', borderRadius: 'var(--radius-sm)', background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
+            🎬 Movies: <strong style={{ color: 'var(--text-primary)' }}>{shows.filter(s => (s.type || 'movie') === 'movie').length}</strong>
+          </span>
+          <span style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem', borderRadius: 'var(--radius-sm)', background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
+            📺 TV Shows: <strong style={{ color: 'var(--accent-primary)' }}>{shows.filter(s => s.type === 'tv').length}</strong>
+          </span>
+          <span style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem', borderRadius: 'var(--radius-sm)', background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
+            Total in DB: <strong style={{ color: 'var(--text-primary)' }}>{shows.length}</strong>
+          </span>
+        </div>
+
         <div style={{ marginBottom: '1.25rem' }}>
           <input
             type="text"
@@ -398,12 +415,8 @@ export default function Settings({
               </p>
             ) : (
               matchedShowsToDelete.map(show => {
-                let ratingVal = 'N/A';
-                let total = 0, count = 0;
-                if (show.ratings.imdb) { total += show.ratings.imdb / 2; count++; }
-                if (show.ratings.rottenTomatoesAudience) { total += show.ratings.rottenTomatoesAudience / 20; count++; }
-                if (show.ratings.letterboxd) { total += show.ratings.letterboxd; count++; }
-                if (count > 0) ratingVal = (total / count).toFixed(1) + '/5';
+                const formatted = formatSieveScore(show);
+                const ratingVal = formatted === 'N/A' ? 'N/A' : `${formatted}/5`;
 
                 return (
                   <div 
@@ -419,9 +432,10 @@ export default function Settings({
                     <div>
                       <div style={{ fontWeight: 'bold', fontSize: '0.9rem', color: 'var(--text-primary)' }}>
                         {show.title} <span style={{ fontSize: '0.75rem', fontWeight: 'normal', color: 'var(--text-muted)' }}>({show.year})</span>
+                        {show.totalSeasons ? <span style={{ fontSize: '0.7rem', marginLeft: '0.4rem', color: 'var(--accent-primary)', background: 'rgba(168,85,247,0.15)', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>{show.totalSeasons}S</span> : null}
                       </div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        {show.language} • {show.platform} • {show.type === 'movie' ? 'Movie' : 'TV Series'} • Sieve Score: ★ {ratingVal}
+                        {show.language} • {show.platform} • {show.type === 'tv' ? 'TV Series' : 'Movie'} • Sieve Score: ★ {ratingVal}
                       </div>
                     </div>
                     
@@ -442,7 +456,7 @@ export default function Settings({
                         fontSize: '0.75rem'
                       }}
                     >
-                      <Trash size={12} />
+                      <Trash2 size={12} />
                       Delete
                     </button>
                   </div>
@@ -457,7 +471,7 @@ export default function Settings({
       <div className="settings-card" id="settings-bulk-refresh-card">
         <h2>Bulk Ratings Refresh</h2>
         <p className="settings-card-subtitle">
-          Update all movie and TV series ratings in the database with the latest figures from IMDb and Letterboxd. Paces requests sequentially with 500ms delays to respect API rate limits.
+          Update all movie and TV series ratings in the database with the latest figures from IMDb, Rotten Tomatoes (including TV season breakdown), and Letterboxd. Paces requests sequentially with 500ms delays to respect API rate limits.
         </p>
 
         {isBulkRefreshing ? (

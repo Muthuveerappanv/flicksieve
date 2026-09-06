@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { Search, Youtube, Newspaper } from 'lucide-react';
+import { MonitorPlay, Newspaper } from 'lucide-react';
 import { fetchDiscoverIndian, openExternalUrl } from '../utils/api';
+import { useToast } from '../context/ToastContext';
+import DiscoverResults, { rowKey } from './discover/DiscoverResults';
 
 const WINDOW_OPTIONS = [
   { label: 'Last 3 months', value: 90 },
@@ -9,40 +11,50 @@ const WINDOW_OPTIONS = [
 
 const ALL_LANGUAGES = ['Tamil', 'Telugu', 'Malayalam', 'Hindi'];
 
-export default function SieveIndia({ shows = [], reviewers = [], onImportNewShows }) {
+/**
+ * India source panel: critic-first discovery of Indian-language films.
+ *
+ * NOTE: the "Also check my YouTube reviewers" checkbox toggles a backend
+ * supplement — the discover-indian service uses its own curated reviewer list,
+ * not the app's `reviewers` collection.
+ */
+export default function SieveIndia({
+  shows = [],
+  mediaType = 'movie',
+  onImportNewShows,
+  onToggleWatchlist,
+  watchlist = [],
+  existingKeys: existingKeysProp,
+}) {
+  const { triggerToast } = useToast();
+
   const [windowDays, setWindowDays] = useState(90);
-  const [selectedLanguages, setSelectedLanguages] = useState(['Tamil', 'Telugu', 'Malayalam', 'Hindi']);
+  const [selectedLanguages, setSelectedLanguages] = useState([...ALL_LANGUAGES]);
   const [minRating, setMinRating] = useState(0);
   const [includeYoutube, setIncludeYoutube] = useState(false);
   const [sortBy, setSortBy] = useState('score');
-  const [searchTerm, setSearchTerm] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
   const [meta, setMeta] = useState(null);
   const [films, setFilms] = useState([]);
-  const [selection, setSelection] = useState({});
 
   const existingKeys = useMemo(
-    () => new Set(shows.map((s) => (s.title || '').toLowerCase().replace(/[^a-z0-9]/g, ''))),
-    [shows]
+    () => existingKeysProp instanceof Set ? existingKeysProp : new Set(shows.map(rowKey)),
+    [existingKeysProp, shows]
   );
 
-  const visibleFilms = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    let rows = films.filter((f) => !term || f.film.toLowerCase().includes(term));
+  const sortedFilms = useMemo(() => {
     const sorters = {
       score: (a, b) => b.score - a.score,
       rating: (a, b) => (b.avgStars ?? -1) - (a.avgStars ?? -1),
       critics: (a, b) => b.criticCount - a.criticCount,
       newest: (a, b) => (a.ageDays ?? 9999) - (b.ageDays ?? 9999),
     };
-    return [...rows].sort(sorters[sortBy] || sorters.score);
-  }, [films, searchTerm, sortBy]);
+    return [...films].sort(sorters[sortBy] || sorters.score);
+  }, [films, sortBy]);
 
   const handleDiscover = async () => {
     setIsLoading(true);
-    setError('');
     setFilms([]);
     try {
       const data = await fetchDiscoverIndian({
@@ -52,11 +64,10 @@ export default function SieveIndia({ shows = [], reviewers = [], onImportNewShow
         includeYoutube,
       });
       if (data.error) {
-        setError(data.error);
+        triggerToast(data.error, 'error');
         return;
       }
-      const rows = data.films || [];
-      setFilms(rows);
+      setFilms(data.films || []);
       setMeta({
         count: data.count,
         criticReviewCount: data.criticReviewCount,
@@ -65,65 +76,54 @@ export default function SieveIndia({ shows = [], reviewers = [], onImportNewShow
         failedOutlets: data.failedOutlets || [],
         failedReviewers: data.failedReviewers || [],
       });
-      const preset = {};
-      rows.forEach((f) => {
-        const key = f.filmKey;
-        preset[key] = !existingKeys.has(key);
-      });
-      setSelection(preset);
     } catch (err) {
-      setError(`Discovery failed: ${err.message}`);
+      triggerToast(`Discovery failed: ${err.message}`, 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleImport = () => {
-    const toImport = visibleFilms
-      .filter((f) => selection[f.filmKey] && !existingKeys.has(f.filmKey))
-      .map((f) => ({
-        title: f.film,
-        type: 'movie',
-        language: f.language || '',
-        year: f.year,
-        genres: f.genres || [],
-        overview: f.overview || '',
-        platform: f.platform || 'Other',
-        posterUrl: f.posterUrl || null,
-        imdbId: f.imdbId || null,
-        ratings: {
-          imdb: f.imdbRating ?? null,
-          rottenTomatoes: null,
-          letterboxd: f.letterboxdRating ?? null,
-        },
-      }));
-    if (toImport.length > 0 && onImportNewShows) {
-      onImportNewShows(toImport);
-    }
+  const toShow = (f) => ({
+    title: f.film,
+    type: mediaType,
+    language: f.language || '',
+    year: f.year,
+    genres: f.genres || [],
+    overview: f.overview || '',
+    platform: f.platform || 'Other',
+    posterUrl: f.posterUrl || null,
+    imdbId: f.imdbId || null,
+    ratings: {
+      imdb: f.imdbRating ?? null,
+      rottenTomatoes: null,
+      letterboxd: f.letterboxdRating ?? null,
+    },
+  });
+
+  const handleImport = (selected) => {
+    if (selected.length && onImportNewShows) onImportNewShows(selected.map(toShow));
     setFilms([]);
     setMeta(null);
   };
 
-  const selectedCount = visibleFilms.filter(
-    (f) => selection[f.filmKey] && !existingKeys.has(f.filmKey)
-  ).length;
+  const watchlistKeys = new Set(watchlist.map(rowKey));
 
   return (
-    <div className="tracker-container">
-      <div className="tracker-header">
-        <h2 className="section-title">Sieve India</h2>
-        <p className="section-subtitle">
-          Handpicked, credible Indian critic reviews for Tamil, Telugu, Malayalam, and Hindi films.
-          Ranked by professional critic verdicts &mdash; IMDb and Letterboxd scores are shown only as context.
-        </p>
-      </div>
+    <div>
+      <p className="section-subtitle">
+        Handpicked, credible Indian critic reviews for Tamil, Telugu, Malayalam, and Hindi films.
+        Ranked by professional critic verdicts &mdash; IMDb and Letterboxd scores are shown only as
+        context.
+      </p>
 
       <div className="discover-controls">
         <label className="control-group">
           Window
           <select value={windowDays} onChange={(e) => setWindowDays(Number(e.target.value))}>
             {WINDOW_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
             ))}
           </select>
         </label>
@@ -138,15 +138,11 @@ export default function SieveIndia({ shows = [], reviewers = [], onImportNewShow
                   key={lang}
                   type="button"
                   className={`reviewer-chip ${active ? 'active' : ''}`}
-                  style={{
-                    borderColor: active ? 'var(--accent-primary, #a855f7)' : undefined,
-                    background: active ? 'rgba(168, 85, 247, 0.2)' : undefined,
-                  }}
-                  onClick={() => {
+                  onClick={() =>
                     setSelectedLanguages((prev) =>
                       active ? prev.filter((l) => l !== lang) : [...prev, lang]
-                    );
-                  }}
+                    )
+                  }
                 >
                   {lang}
                 </button>
@@ -186,25 +182,16 @@ export default function SieveIndia({ shows = [], reviewers = [], onImportNewShow
           <span>Also check my YouTube reviewers</span>
         </label>
 
-        <button
-          type="button"
-          className="btn-primary"
-          onClick={handleDiscover}
-          disabled={isLoading}
-        >
+        <button type="button" className="btn btn-primary" onClick={handleDiscover} disabled={isLoading}>
           {isLoading ? 'Checking reviews…' : 'Discover films'}
         </button>
       </div>
-
-      {error && <div className="error-banner">{error}</div>}
 
       {meta && (
         <div className="discover-meta">
           <span>{meta.count} films</span>
           <span>{meta.criticReviewCount} press reviews</span>
-          {meta.youtubeReviewCount > 0 && (
-            <span>{meta.youtubeReviewCount} YouTube reviews</span>
-          )}
+          {meta.youtubeReviewCount > 0 && <span>{meta.youtubeReviewCount} YouTube reviews</span>}
           {meta.failedOutlets?.length > 0 && (
             <span className="warn">⚠ unreachable outlets: {meta.failedOutlets.join(', ')}</span>
           )}
@@ -214,104 +201,77 @@ export default function SieveIndia({ shows = [], reviewers = [], onImportNewShow
         </div>
       )}
 
-      {films.length > 0 && (
-        <>
-          <div className="discover-toolbar">
-            <div className="search-box">
-              <Search size={16} />
-              <input
-                type="text"
-                placeholder="Filter films…"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+      <DiscoverResults
+        rows={sortedFilms}
+        existingKeys={existingKeys}
+        onImport={handleImport}
+        importLabel="Import"
+        searchPlaceholder="Filter films…"
+        getText={(f) => f.film || ''}
+        emptyText="No films match your filter."
+        onWatchlist={
+          onToggleWatchlist ? (f) => onToggleWatchlist({ ...toShow(f), id: rowKey(f) }) : undefined
+        }
+        isWatchlisted={(f) => watchlistKeys.has(rowKey(f))}
+        renderRow={(f) => (
+          <>
+            {f.posterUrl && (
+              <img className="discover-poster" src={f.posterUrl} alt={f.film} loading="lazy" />
+            )}
+            <div className="discover-info">
+              <div className="discover-title">
+                <span>{f.film}</span>
+                {f.year && <span className="muted">({f.year})</span>}
+              </div>
+
+              <div className="verdict-row">
+                <span className="verdict-stars">{f.avgStars ? `★ ${f.avgStars}/5` : '★ —'}</span>
+                <span className="verdict-count">
+                  {f.criticCount} critic{f.criticCount === 1 ? '' : 's'}
+                </span>
+                {f.language && <span className="tag-language">{f.language}</span>}
+              </div>
+
+              <div className="reviewer-links">
+                {(f.criticReviews || []).map((c) => (
+                  <button
+                    key={c.url}
+                    type="button"
+                    className="reviewer-chip is-press"
+                    onClick={() => openExternalUrl(c.url)}
+                    title={c.headline}
+                  >
+                    <Newspaper size={12} />
+                    {c.outlet}
+                    {c.stars ? ` ★${c.stars}` : ''}
+                  </button>
+                ))}
+                {(f.youtubeReviews || []).map((y) => (
+                  <button
+                    key={y.url}
+                    type="button"
+                    className="reviewer-chip"
+                    onClick={() => openExternalUrl(y.url)}
+                  >
+                    <MonitorPlay size={12} />
+                    {y.reviewer}
+                  </button>
+                ))}
+              </div>
+
+              <div className="context-ratings">
+                <span>IMDb {f.imdbRating ?? '—'}</span>
+                <span>Letterboxd {f.letterboxdRating ? `${f.letterboxdRating}/5` : '—'}</span>
+                {f.platform && f.platform !== 'Other' && (
+                  <span className="tag-platform">{f.platform}</span>
+                )}
+              </div>
+
+              {f.overview && <p className="discover-overview">{f.overview}</p>}
             </div>
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={handleImport}
-              disabled={selectedCount === 0}
-            >
-              Import {selectedCount}
-            </button>
-          </div>
-
-          <div className="discover-grid">
-            {visibleFilms.map((f) => {
-              const already = existingKeys.has(f.filmKey);
-              return (
-                <div key={f.filmKey} className={`discover-row ${already ? 'is-existing' : ''}`}>
-                  <input
-                    type="checkbox"
-                    checked={!!selection[f.filmKey] && !already}
-                    disabled={already}
-                    onChange={() =>
-                      setSelection((prev) => ({ ...prev, [f.filmKey]: !prev[f.filmKey] }))
-                    }
-                  />
-                  {f.posterUrl && (
-                    <img className="discover-poster" src={f.posterUrl} alt={f.film} loading="lazy" />
-                  )}
-                  <div className="discover-info">
-                    <div className="discover-title">
-                      <span>{f.film}</span>
-                      {f.year && <span className="muted">({f.year})</span>}
-                      {already && <span className="badge">In database</span>}
-                    </div>
-
-                    <div className="verdict-row">
-                      <span className="verdict-stars">
-                        {f.avgStars ? `★ ${f.avgStars}/5` : '★ —'}
-                      </span>
-                      <span className="verdict-count">
-                        {f.criticCount} critic{f.criticCount === 1 ? '' : 's'}
-                      </span>
-                      {f.language && <span className="tag-language">{f.language}</span>}
-                    </div>
-
-                    <div className="reviewer-links">
-                      {(f.criticReviews || []).map((c) => (
-                        <button
-                          key={c.url}
-                          type="button"
-                          className="reviewer-chip is-press"
-                          onClick={() => openExternalUrl(c.url)}
-                          title={c.headline}
-                        >
-                          <Newspaper size={12} />
-                          {c.outlet}{c.stars ? ` ★${c.stars}` : ''}
-                        </button>
-                      ))}
-                      {(f.youtubeReviews || []).map((y) => (
-                        <button
-                          key={y.url}
-                          type="button"
-                          className="reviewer-chip"
-                          onClick={() => openExternalUrl(y.url)}
-                        >
-                          <Youtube size={12} />
-                          {y.reviewer}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Context only -- deliberately de-emphasised. */}
-                    <div className="context-ratings">
-                      <span>IMDb {f.imdbRating ?? '—'}</span>
-                      <span>Letterboxd {f.letterboxdRating ? `${f.letterboxdRating}/5` : '—'}</span>
-                      {f.platform && f.platform !== 'Other' && (
-                        <span className="tag-platform">{f.platform}</span>
-                      )}
-                    </div>
-
-                    {f.overview && <p className="discover-overview">{f.overview}</p>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
+          </>
+        )}
+      />
     </div>
   );
 }

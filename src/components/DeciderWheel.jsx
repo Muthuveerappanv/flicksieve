@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Play, RotateCw, ExternalLink, Bookmark, Star } from 'lucide-react';
+import { formatSieveScore } from '../utils/score.js';
 
 export default function DeciderWheel({ 
   matchingShows = [], 
@@ -46,13 +47,11 @@ export default function DeciderWheel({
   const animationRef = useRef(null);
   const rotationAngle = useRef(0);
   const angularVelocity = useRef(0);
+  // Snapshot of the wheel list captured when a spin starts, so determineWinner
+  // reads the same slices that were drawn rather than a later re-render's list.
+  const spinShowsRef = useRef([]);
 
-  // Re-draw wheel whenever candidate list changes
-  useEffect(() => {
-    drawWheel();
-  }, [wheelShows]);
-
-  const drawWheel = (currentAngle = 0) => {
+  const drawWheel = useCallback((currentAngle = 0) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -158,62 +157,59 @@ export default function DeciderWheel({
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('SELECT', centerX, centerY);
-  };
+  }, [numSlices, wheelShows]);
 
-  const startSpin = () => {
-    if (isSpinning || numSlices === 0) return;
+  // Re-draw wheel whenever candidate list changes
+  useEffect(() => {
+    drawWheel();
+  }, [drawWheel]);
 
-    setSelectedShow(null);
-    setIsSpinning(true);
-    
-    // Set initial random angular velocity (degrees/radian equivalent)
-    // 0.3 to 0.5 rad per frame
-    angularVelocity.current = 0.35 + Math.random() * 0.15;
-    
-    animateSpin();
-  };
+  const determineWinner = useCallback(() => {
+    const list = spinShowsRef.current;
+    if (list.length === 0) return;
 
-  const animateSpin = () => {
-    rotationAngle.current += angularVelocity.current;
-    // Friction: reduce speed gradually
-    angularVelocity.current *= 0.985;
+    const arcAngle = (2 * Math.PI) / list.length;
 
-    // Draw current rotation state
-    drawWheel(rotationAngle.current);
-
-    if (angularVelocity.current > 0.002) {
-      animationRef.current = requestAnimationFrame(animateSpin);
-    } else {
-      // Spinning finished
-      setIsSpinning(false);
-      determineWinner();
-    }
-  };
-
-  const determineWinner = () => {
-    if (numSlices === 0) return;
-    
-    // Pointer is at the top (-90 degrees or 3/2 * PI radians)
-    // Find which slice overlaps with -PI/2 in the rotation
-    const arcAngle = (2 * Math.PI) / numSlices;
-    
-    // Normalize rotation angle between 0 and 2*PI
     let normalizedRotation = rotationAngle.current % (2 * Math.PI);
     if (normalizedRotation < 0) {
       normalizedRotation += 2 * Math.PI;
     }
 
-    // Math: The pointer is pointing at 1.5 * PI (top of canvas)
-    // The relative angle on the wheel pointing at 1.5 * PI is:
-    // (1.5 * PI - normalizedRotation) mod 2*PI
     let winningRelativeAngle = (1.5 * Math.PI - normalizedRotation) % (2 * Math.PI);
     if (winningRelativeAngle < 0) {
       winningRelativeAngle += 2 * Math.PI;
     }
 
     const winnerIndex = Math.floor(winningRelativeAngle / arcAngle);
-    const winner = wheelShows[winnerIndex];
-    setSelectedShow(winner);
+    setSelectedShow(list[winnerIndex]);
+  }, []);
+
+  const animateSpin = useCallback(() => {
+    rotationAngle.current += angularVelocity.current;
+    angularVelocity.current *= 0.985;
+
+    drawWheel(rotationAngle.current);
+
+    if (angularVelocity.current > 0.002) {
+      animationRef.current = requestAnimationFrame(animateSpin);
+    } else {
+      setIsSpinning(false);
+      determineWinner();
+    }
+  }, [drawWheel, determineWinner]);
+
+  const startSpin = () => {
+    if (isSpinning || numSlices === 0) return;
+
+    setSelectedShow(null);
+    setIsSpinning(true);
+    spinShowsRef.current = wheelShows;
+
+    // Set initial random angular velocity (degrees/radian equivalent)
+    // 0.3 to 0.5 rad per frame
+    angularVelocity.current = 0.35 + Math.random() * 0.15;
+    
+    animateSpin();
   };
 
   useEffect(() => {
@@ -300,11 +296,7 @@ export default function DeciderWheel({
               </div>
               <div className="sieve-score-value" style={{ fontSize: '1.25rem' }}>
                 <Star size={18} fill="currentColor" />
-                {(( (selectedShow.ratings.imdb ? selectedShow.ratings.imdb / 2 : 0) + 
-                    (selectedShow.ratings.rottenTomatoes ? selectedShow.ratings.rottenTomatoes / 20 : 0) + 
-                    (selectedShow.ratings.letterboxd ? selectedShow.ratings.letterboxd : 0)
-                   ) / [selectedShow.ratings.imdb, selectedShow.ratings.rottenTomatoes, selectedShow.ratings.letterboxd].filter(Boolean).length
-                 ).toFixed(2)}
+                {formatSieveScore(selectedShow)}
               </div>
             </div>
             
@@ -350,17 +342,6 @@ export default function DeciderWheel({
           </div>
         )}
       </div>
-      
-      {/* Dynamic spinning helper styling */}
-      <style>{`
-        .spin-animation {
-          animation: spin 1.5s linear infinite;
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 }
