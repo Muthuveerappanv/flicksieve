@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, CheckCircle, Trash, Star, MessageSquare, Calendar, X } from 'lucide-react';
+import { Clock, CheckCircle, Trash2, Star, MessageSquare, Calendar, X } from 'lucide-react';
 
 export default function Watchlist({ 
   watchlist = [], 
@@ -204,7 +204,7 @@ export default function Watchlist({
                       style={{ padding: '0.5rem', fontSize: '0.8rem' }}
                       title="Remove from watchlist"
                     >
-                      <Trash size={14} />
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
@@ -298,7 +298,7 @@ export default function Watchlist({
                   title="Remove from history"
                   style={{ alignSelf: 'center', padding: '0.5rem' }}
                 >
-                  <Trash size={14} />
+                  <Trash2 size={14} />
                 </button>
               </div>
             ))}

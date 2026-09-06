@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Search, Youtube, Newspaper } from 'lucide-react';
+import { Search, MonitorPlay, Newspaper } from 'lucide-react';
 import { fetchDiscoverIndian, openExternalUrl } from '../utils/api';
 
 const WINDOW_OPTIONS = [
@@ -289,7 +289,7 @@ export default function SieveIndia({ shows = [], reviewers = [], onImportNewShow
                           className="reviewer-chip"
                           onClick={() => openExternalUrl(y.url)}
                         >
-                          <Youtube size={12} />
+                          <MonitorPlay size={12} />
                           {y.reviewer}
                         </button>
                       ))}

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Star, Film, Tv, Bookmark, Youtube, ChevronDown, ExternalLink, Trash2, RotateCw } from 'lucide-react';
+import { Star, Film, Tv, Bookmark, MonitorPlay, ChevronDown, ExternalLink, Trash2, RotateCw } from 'lucide-react';
 
 export default function ShowCard({ 
   show, 
@@ -377,7 +377,7 @@ export default function ShowCard({
               onClick={() => setShowYoutubeMenu(!showYoutubeMenu)}
               title="YouTube Reviews"
             >
-              <Youtube size={15} style={{ color: '#ef4444' }} />
+              <MonitorPlay size={15} style={{ color: '#ef4444' }} />
               Reviews
               <ChevronDown size={12} />
             </button>

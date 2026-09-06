@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Youtube, Plus, Trash, Film, Tv, Download, Upload, RotateCcw, RotateCw, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Download, Upload, RotateCcw, RotateCw, AlertTriangle } from 'lucide-react';
 
 export default function Settings({
   shows = [],
@@ -281,7 +281,7 @@ export default function Settings({
                   onClick={() => onDeleteReviewer(rev.id)}
                   title={`Delete ${rev.name}`}
                 >
-                  <Trash size={14} style={{ color: 'var(--error)' }} />
+                  <Trash2 size={14} style={{ color: 'var(--error)' }} />
                 </button>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.5rem' }}>
@@ -456,7 +456,7 @@ export default function Settings({
                         fontSize: '0.75rem'
                       }}
                     >
-                      <Trash size={12} />
+                      <Trash2 size={12} />
                       Delete
                     </button>
                   </div>
