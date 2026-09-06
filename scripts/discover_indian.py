@@ -23,6 +23,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
+from urllib.parse import urlparse
 
 from curl_cffi import requests as creq
 
@@ -95,6 +96,7 @@ LANGUAGE_KEYWORDS = {
     "Malayalam": r"\bmalayalam\b|\bmollywood\b",
     "Hindi": r"\bhindi\b|\bbollywood\b",
     "Kannada": r"\bkannada\b|\bsandalwood\b",
+    "English": r"\benglish\b|\bhollywood\b",
 }
 
 WINDOW_PRESETS = {"3m": 90, "6m": 180}
@@ -373,11 +375,22 @@ def extract_review_rating(html):
 
 def detect_language(url, headline, outlet_default):
     """URL path wins, then headline keywords, then the outlet's default."""
-    haystacks = [(url or "").lower(), (headline or "").lower()]
-    for text in haystacks:
-        for language, pattern in LANGUAGE_KEYWORDS.items():
-            if re.search(pattern, text):
-                return language
+    path = urlparse(url or "").path.lower() if "://" in (url or "") else (url or "").lower()
+    for language, pattern in LANGUAGE_KEYWORDS.items():
+        if re.search(pattern, path):
+            return language
+
+    headline_lower = (headline or "").lower()
+    for language, pattern in LANGUAGE_KEYWORDS.items():
+        if re.search(pattern, headline_lower):
+            return language
+
+    m = re.search(r"\(([A-Za-z]+)\)", headline or "")
+    if m:
+        cand = m.group(1).title()
+        if cand != outlet_default:
+            return cand
+
     return outlet_default
 
 
@@ -492,7 +505,7 @@ def scrape_all_critic_sites(window_days=90, languages=None, outlets=None):
 
     if languages:
         wanted = {l.title() for l in languages}
-        reviews = [r for r in reviews if r["language"] in wanted or r["language"] is None]
+        reviews = [r for r in reviews if r.get("language") in wanted]
     return reviews, failed
 
 
@@ -646,7 +659,7 @@ def aggregate_critics(critic_reviews, youtube_reviews=None, min_critics=1,
         langs = sorted(entry["languages"])
         if languages:
             wanted = {l.title() for l in languages}
-            if langs and not (set(langs) & wanted):
+            if not (set(langs) & wanted):
                 continue
 
         age_days = None

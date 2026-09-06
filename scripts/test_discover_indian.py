@@ -260,6 +260,15 @@ class TestLanguageDetection(unittest.TestCase):
     def test_from_headline(self):
         self.assertEqual(di.detect_language("https://x/y", "Telugu movie review: Ramba", None), "Telugu")
 
+    def test_headline_english_overrides_outlet_default(self):
+        detected = di.detect_language(
+            "https://www.bollywoodhungama.com/movie/xyz/",
+            "Spider-Man: Brand New Day (English) Review",
+            "Hindi",
+        )
+        self.assertNotEqual(detected, "Hindi")
+        self.assertEqual(detected, "English")
+
     def test_outlet_default_is_the_fallback(self):
         self.assertEqual(di.detect_language("https://x/y", "Some Film Review", "Hindi"), "Hindi")
 
@@ -348,6 +357,11 @@ class TestAggregateCritics(unittest.TestCase):
     def test_language_filter(self):
         rows = di.aggregate_critics(
             [self._review("A", "Telugu Film", 4.0, lang="Telugu")], languages=["Tamil"])
+        self.assertEqual(rows, [])
+
+    def test_language_filter_excludes_none_language(self):
+        rows = di.aggregate_critics(
+            [self._review("A", "Unknown Film", 4.0, lang=None)], languages=["Tamil"])
         self.assertEqual(rows, [])
 
     def test_unrated_films_are_kept_when_no_min_rating(self):
