@@ -1,20 +1,34 @@
 [
   {
     "id": "rev-1",
-    "name": "filmicraft arun",
-    "urlPattern": "https://www.youtube.com/results?search_query=filmicraft+arun+{title}",
-    "languages": ["tamil", "telugu", "malayalam", "hindi"]
+    "name": "Tamil Talkies",
+    "youtubeHandle": "@TamilTalkies",
+    "urlPattern": "https://www.youtube.com/results?search_query=tamil+talkies+{title}",
+    "languages": ["tamil", "telugu", "malayalam", "hindi"],
+    "trusted": true
   },
   {
     "id": "rev-2",
-    "name": "tamil talkies",
-    "urlPattern": "https://www.youtube.com/results?search_query=tamil+talkies+{title}",
-    "languages": ["tamil", "telugu", "malayalam", "hindi"]
+    "name": "Filmi craft",
+    "youtubeHandle": "@Filmicraft",
+    "urlPattern": "https://www.youtube.com/results?search_query=filmicraft+arun+{title}",
+    "languages": ["tamil", "telugu", "malayalam", "hindi"],
+    "trusted": true
   },
   {
     "id": "rev-3",
-    "name": "baradwaj rangan",
+    "name": "Unni Vlogs Cinephile",
+    "youtubeHandle": "@unnivlogs",
+    "urlPattern": "https://www.youtube.com/results?search_query=unni+vlogs+{title}",
+    "languages": ["malayalam", "tamil"],
+    "trusted": true
+  },
+  {
+    "id": "rev-4",
+    "name": "Baradwaj Rangan",
+    "youtubeHandle": null,
     "urlPattern": "https://www.youtube.com/results?search_query=baradwaj+rangan+{title}",
-    "languages": ["tamil", "telugu", "malayalam", "hindi"]
+    "languages": ["tamil", "telugu", "malayalam", "hindi"],
+    "trusted": true
   }
 ]
