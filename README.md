@@ -15,7 +15,7 @@ A premium, interactive media dashboard designed to curate, filter, and track mov
 - **🎯 Weighted Sieve Filtering**: Filter out titles below a custom score threshold using a responsive slider, or bypass it for unrated entries.
 - **🎡 Decider Wheel**: Can't choose what to watch? Spin the interactive decider wheel to pick a random movie from your current filtered recommendations list.
 - **📅 Discover**: Keep track of release dates for upcoming movies and TV shows across platforms (Netflix, Prime, Hotstar, etc.) in a timeline layout, plus discover top-rated at-home streaming releases.
-- **🇮🇳 Sieve India**: Tracks the film critics you trust — YouTube reviewers and Indian press — and surfaces what they've actually reviewed. Ranked by how many of your reviewers covered each film, because crowd ratings for Indian cinema are widely gamed. IMDb and Letterboxd scores are shown as context only, never used to rank or filter (a measured 38% of films your reviewers cover have no Letterboxd entry at all).
+- **🇮🇳 Sieve India**: Discovers Tamil, Telugu, Malayalam and Hindi films from handpicked, credible Indian critic websites (The Indian Express, 123Telugu, Bollywood Hungama, NDTV, News18). Ranked by professional critic star ratings across a 3- or 6-month window, searchable and filterable by verdict, language and outlet count. YouTube reviewers are an optional supplement. IMDb and Letterboxd scores are shown as context only — never used to rank or filter.
 - **🔖 Watchlist & Logs**: Manage your watchlist and log watched titles with notes.
 - **🎨 Curated Accent Themes**: Toggle between five modern, vibrant visual themes:
   - **Amethyst** (Vibrant Purple & Pink - Default)
