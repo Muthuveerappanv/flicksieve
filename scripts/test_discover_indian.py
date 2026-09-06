@@ -105,3 +105,20 @@ class TestHarvest(unittest.TestCase):
     def test_extract_initial_data_ignores_braces_inside_strings(self):
         html = '<script>ytInitialData = {"t":"a}b","n":2};</script>'
         self.assertEqual(di.extract_initial_data(html), {"t": "a}b", "n": 2})
+
+
+class TestCriticParsing(unittest.TestCase):
+    def test_json_ld_rating(self):
+        html = '<script type="application/ld+json">{"reviewRating":{"ratingValue":"2.5"}}</script>'
+        self.assertEqual(di.extract_star_rating(html), 2.5)
+
+    def test_rejects_out_of_range_values(self):
+        html = '<script type="application/ld+json">{"ratingValue":"7"}</script>'
+        self.assertIsNone(di.extract_star_rating(html))
+
+    def test_text_fallback(self):
+        self.assertEqual(di.extract_star_rating("<p>We give it 3.5 out of 5 stars</p>"), 3.5)
+
+    def test_feed_item_parsing(self):
+        xml = "<item><title><![CDATA[Gandhari movie review: solid]]></title><link>https://x/1</link></item>"
+        self.assertEqual(di._feed_items(xml), [("Gandhari movie review: solid", "https://x/1")])

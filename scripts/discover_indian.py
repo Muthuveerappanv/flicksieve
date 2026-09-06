@@ -218,3 +218,61 @@ def scrape_channel(handle, max_age_days=60):
             "ageDays": age_days,
         })
     return reviews
+
+
+def _feed_items(xml):
+    items = []
+    for block in re.findall(r"<item>(.*?)</item>", xml or "", re.S):
+        title = re.search(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>", block, re.S)
+        link = re.search(r"<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</link>", block, re.S)
+        if title and link:
+            items.append((title.group(1).strip(), link.group(1).strip()))
+    return items
+
+
+def extract_star_rating(html):
+    """Pull a 0-5 critic rating from an article. JSON-LD first, text second.
+
+    Values above 5 are rejected: a live text-pattern false positive returned
+    7 from unrelated copy.
+    """
+    if not html:
+        return None
+    for m in re.finditer(r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>', html, re.S):
+        for candidate in re.findall(r'"ratingValue"\s*:\s*"?([\d.]+)"?', m.group(1)):
+            try:
+                value = float(candidate)
+            except ValueError:
+                continue
+            if 0 < value <= 5:
+                return value
+    m = re.search(r"(\d(?:\.\d)?)\s*(?:out of\s*5|/\s*5)", html, re.I)
+    if m:
+        value = float(m.group(1))
+        if 0 < value <= 5:
+            return value
+    return None
+
+
+def scrape_critics(max_articles=12):
+    """Return critic reviews across all feeds. Never raises."""
+    found = []
+    for outlet, url in CRITIC_FEEDS.items():
+        xml = _fetch(url)
+        if not xml:
+            continue
+        for headline, link in _feed_items(xml):
+            film = film_title_from_review(headline)
+            if not film:
+                continue
+            found.append({"reviewer": outlet, "film": film, "filmKey": normalize_title(film),
+                          "url": link, "headline": headline, "stars": None})
+
+    def add_stars(entry):
+        entry["stars"] = extract_star_rating(_fetch(entry["url"], timeout=20, retries=1))
+        return entry
+
+    subset = found[:max_articles]
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        subset = list(pool.map(add_stars, subset))
+    return subset + found[max_articles:]
