@@ -937,7 +937,6 @@ export default function App() {
                 shows={shows}
                 watchlist={watchlist}
                 onToggleWatchlist={handleToggleWatchlist}
-                reviewers={reviewers}
                 onImportNewShows={handleImportNewShows}
                 mediaType={activeMediaType}
               />

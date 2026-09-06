@@ -39,3 +39,6 @@ scratch/
 
 # Hermes planning notes
 .hermes/
+
+# Claude Code worktrees & local state
+.claude/
