@@ -17,6 +17,20 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class TestCleanHeadline(unittest.TestCase):
+    def test_unescapes_entities_and_strips_html_tags(self):
+        self.assertEqual(
+            di.clean_headline("&#39;i&#39;Bethlehem Kudumba Unit&#39;/i&#39;"),
+            "Bethlehem Kudumba Unit",
+        )
+
+    def test_preserves_apostrophes(self):
+        self.assertEqual(
+            di.clean_headline("Dulquer&#8217;s I&#39;m Game"),
+            "Dulquer's I'm Game",
+        )
+
+
 class TestFilmTitleFromReview(unittest.TestCase):
     def test_strips_review_suffix_and_cast(self):
         self.assertEqual(

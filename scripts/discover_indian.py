@@ -15,6 +15,7 @@ Usage:
 
 Prints a single JSON object on stdout.
 """
+import html as html_lib
 import json
 import math
 import re
@@ -400,6 +401,22 @@ def _article_date(html, url):
     return None
 
 
+def clean_headline(headline):
+    """Unescape entities, strip HTML tags and pseudo-tags, collapse whitespace.
+
+    Apostrophes survive ("Dulquer's" stays "Dulquer's").
+    """
+    if not headline:
+        return ""
+    text = html_lib.unescape(headline)
+    text = text.replace("\u2018", "'").replace("\u2019", "'")
+    text = text.replace("\u201c", '"').replace("\u201d", '"')
+    text = re.sub(r"<[^>]+>", "", text)
+    text = re.sub(r"['\"]/?i['\"]", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
 def _fetch_article(args):
     outlet, config, url = args
     html = _fetch(url, timeout=20, retries=1)
@@ -409,7 +426,7 @@ def _fetch_article(args):
     headline = ""
     match = re.search(r'<meta property="og:title" content="([^"]+)"', html)
     if match:
-        headline = re.sub(r"&#\d+;|&[a-z]+;", "'", match.group(1))
+        headline = clean_headline(match.group(1))
 
     film = film_title_from_review(headline) or film_title_from_review(
         url.rstrip("/").rsplit("/", 1)[-1].replace("-", " ")
