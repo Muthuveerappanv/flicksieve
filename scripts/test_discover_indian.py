@@ -15,3 +15,36 @@ class TestConstants(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestFilmTitleFromReview(unittest.TestCase):
+    def test_strips_review_suffix_and_cast(self):
+        self.assertEqual(
+            di.film_title_from_review("IMMORTAL Review - GV Prakash Kumar, Kayadu Lohar - Tamil Talkies"),
+            "IMMORTAL",
+        )
+
+    def test_handles_movie_review_phrasing(self):
+        self.assertEqual(
+            di.film_title_from_review("Bethlehem Kudumba Unit Malayalam Movie Review - Nivin Pauly"),
+            "Bethlehem Kudumba Unit",
+        )
+
+    def test_handles_version_qualifier(self):
+        self.assertEqual(
+            di.film_title_from_review("IRUMUDI Tamil Version Review - Ravi Teja, GV Prakash"),
+            "IRUMUDI",
+        )
+
+    def test_handles_apostrophes(self):
+        self.assertEqual(
+            di.film_title_from_review("I'M GAME Review - Dulquer Salmaan, Kayadu Lohar"),
+            "I'M GAME",
+        )
+
+    def test_returns_none_for_non_reviews(self):
+        self.assertIsNone(di.film_title_from_review("MOONWALK This Diwali! AR Rahman x Prabhudeva"))
+
+    def test_normalize_matches_across_casing_and_punctuation(self):
+        self.assertEqual(di.normalize_title("I'M GAME"), di.normalize_title("i'm game"))
+        self.assertEqual(di.normalize_title("Vishwanath & Sons"), di.normalize_title("Vishwanath and Sons"))

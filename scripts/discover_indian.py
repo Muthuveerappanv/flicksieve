@@ -42,3 +42,24 @@ W_REVIEWER = 3.0
 W_REACH = 1.0
 W_CRITIC = 0.5
 W_RECENCY = 0.5
+
+
+# Qualifiers that sit between the film name and the word "review".
+_QUALIFIER = r"(?:Malayalam\s+|Tamil\s+|Telugu\s+|Hindi\s+|Kannada\s+)?(?:Version\s+)?(?:Movie\s+|Film\s+|Web\s+Series\s+|Series\s+)?"
+
+
+def film_title_from_review(video_title):
+    """'IMMORTAL Review - GV Prakash' -> 'IMMORTAL'. None if not a review."""
+    if not video_title or not REVIEW_WORD.search(video_title):
+        return None
+    head = re.split(rf"\s*{_QUALIFIER}Review\b", video_title, maxsplit=1, flags=re.I)[0]
+    head = head.strip(" -|:\u2013\u2014")
+    return head or None
+
+
+def normalize_title(title):
+    """Join key: casing, punctuation and '&'/'and' differences collapse."""
+    if not title:
+        return ""
+    text = title.lower().replace("&", " and ")
+    return re.sub(r"[^a-z0-9]", "", text)
