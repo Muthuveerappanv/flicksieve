@@ -305,37 +305,13 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow, defaultType 
 
             {/* Dropdown search results */}
             {searchResults.length > 0 && (
-              <div style={{
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                marginTop: '0.5rem',
-                maxHeight: '200px',
-                overflowY: 'auto',
-                backgroundColor: 'var(--bg-secondary)',
-                boxShadow: 'var(--shadow-md)'
-              }}>
+              <div className="imdb-search-results">
                 {searchResults.map(result => (
                   <button
                     key={result.id}
                     type="button"
+                    className="imdb-search-result"
                     onClick={() => handleSelectSearchResult(result)}
-                    style={{
-                      width: '100%',
-                      textAlign: 'left',
-                      padding: '0.65rem 1rem',
-                      border: 'none',
-                      borderBottom: '1px solid var(--border-color)',
-                      backgroundColor: 'transparent',
-                      color: 'var(--text-primary)',
-                      cursor: 'pointer',
-                      fontSize: '0.8rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.75rem',
-                      transition: 'background-color 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                   >
                     {result.primaryImage?.url ? (
                       <img src={result.primaryImage.url} alt="" style={{ width: '24px', height: '36px', objectFit: 'cover', borderRadius: '2px' }} />
@@ -353,7 +329,7 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow, defaultType 
           </div>
 
           {/* Form */}
-          <form onSubmit={handleAddShowSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <form onSubmit={handleAddShowSubmit} className="modal-form-grid">
             <div className="form-group form-col-full">
               <label className="form-label" htmlFor="modal-show-title">Title *</label>
               <input
@@ -411,7 +387,7 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow, defaultType 
                 <span style={{ fontWeight: 600, color: 'var(--accent-primary)' }}>✨ Rotten Tomatoes Season Ratings Loaded:</span>
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.35rem' }}>
                   {seasonsData.map((s, idx) => (
-                    <span key={idx} style={{ background: 'var(--bg-tertiary)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem' }}>
+                    <span key={s.season ?? idx} style={{ background: 'var(--bg-tertiary)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem' }}>
                       {s.season}: {s.criticScore !== null ? `🍅 ${s.criticScore}%` : ''} {s.audienceScore !== null ? `🍿 ${s.audienceScore}%` : ''}
                     </span>
                   ))}

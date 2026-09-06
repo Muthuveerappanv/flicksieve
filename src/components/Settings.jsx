@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Plus, Trash2, Download, Upload, RotateCcw, RotateCw, AlertTriangle } from 'lucide-react';
+import { formatSieveScore } from '../utils/score.js';
 
 export default function Settings({
   shows = [],
@@ -177,6 +178,10 @@ export default function Settings({
           Personalize the look and feel of your FlickSieve dashboard by choosing a curated color theme.
         </p>
 
+        {/* NOTE: each swatch's inline --theme-primary / --theme-secondary mirror the
+            accent hex pairs in the [data-theme=...] blocks in index.css. They are
+            intentionally hardcoded so a swatch shows its own theme colour regardless
+            of the active theme — keep the two in sync when editing a palette. */}
         <div className="theme-grid">
           <button 
             type="button"
@@ -410,13 +415,8 @@ export default function Settings({
               </p>
             ) : (
               matchedShowsToDelete.map(show => {
-                let ratingVal = 'N/A';
-                let total = 0, count = 0;
-                if (show.ratings.imdb) { total += show.ratings.imdb / 2; count++; }
-                if (show.ratings.rottenTomatoesAudience) { total += show.ratings.rottenTomatoesAudience / 20; count++; }
-                if (show.ratings.letterboxd) { total += show.ratings.letterboxd; count++; }
-                else if (show.type === 'tv' && show.ratings.rottenTomatoes) { total += show.ratings.rottenTomatoes / 20; count++; }
-                if (count > 0) ratingVal = (total / count).toFixed(1) + '/5';
+                const formatted = formatSieveScore(show);
+                const ratingVal = formatted === 'N/A' ? 'N/A' : `${formatted}/5`;
 
                 return (
                   <div 

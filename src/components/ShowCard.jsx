@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Star, Film, Tv, Bookmark, MonitorPlay, ChevronDown, ExternalLink, Trash2, RotateCw } from 'lucide-react';
+import { formatSieveScore } from '../utils/score.js';
 
-export default function ShowCard({ 
+function ShowCard({
   show, 
   isInWatchlist, 
   onToggleWatchlist, 
@@ -29,42 +30,8 @@ export default function ShowCard({
 
   const { title, type, language, year, genres, overview, ratings, platform, youtubeTrailer, posterUrl, imdbId, letterboxdSlug, rottenTomatoesUrl, totalSeasons, yearSpan, seasons } = show;
 
-  // Calculate Sieve Score out of 5
-  const calculateSieveScore = () => {
-    let total = 0;
-    let count = 0;
-
-    if (ratings.imdb !== undefined && ratings.imdb !== null) {
-      total += ratings.imdb / 2; // Convert 10-scale to 5-scale
-      count++;
-    }
-    if (ratings.rottenTomatoesAudience !== undefined && ratings.rottenTomatoesAudience !== null) {
-      total += ratings.rottenTomatoesAudience / 20; // Convert 100-scale to 5-scale
-      count++;
-    }
-
-    if (type === 'tv') {
-      // For TV: Use RT Critic score as the 3rd pillar (or Letterboxd if present, e.g. miniseries)
-      if (ratings.letterboxd !== undefined && ratings.letterboxd !== null) {
-        total += ratings.letterboxd;
-        count++;
-      } else if (ratings.rottenTomatoes !== undefined && ratings.rottenTomatoes !== null) {
-        total += ratings.rottenTomatoes / 20;
-        count++;
-      }
-    } else {
-      // For Movie: Use Letterboxd
-      if (ratings.letterboxd !== undefined && ratings.letterboxd !== null) {
-        total += ratings.letterboxd; // Already 5-scale
-        count++;
-      }
-    }
-
-    if (count === 0) return 'N/A';
-    return (total / count).toFixed(2);
-  };
-
-  const sieveScore = calculateSieveScore();
+  // Canonical Sieve Score (see ../utils/score.js)
+  const sieveScore = formatSieveScore(show);
 
   // Dynamic poster gradient style based on language
   const getPosterGradientClass = () => {
@@ -123,7 +90,7 @@ export default function ShowCard({
           </div>
           <div style={{ display: 'flex', gap: '4px' }}>
             {onRefreshShowRatings && (
-              <button 
+              <button
                 className={`card-refresh-btn ${isRefreshing ? 'spinning' : ''}`}
                 onClick={async (e) => {
                   e.stopPropagation();
@@ -134,76 +101,19 @@ export default function ShowCard({
                 disabled={isRefreshing}
                 title="Refresh Ratings"
                 aria-label="Refresh ratings"
-                style={{
-                  background: 'rgba(0, 0, 0, 0.5)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  color: 'var(--text-muted)',
-                  borderRadius: '50%',
-                  width: '24px',
-                  height: '24px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  pointerEvents: isRefreshing ? 'none' : 'auto'
-                }}
-                onMouseEnter={(e) => {
-                  if (!isRefreshing) {
-                    e.currentTarget.style.backgroundColor = 'var(--accent-primary)';
-                    e.currentTarget.style.borderColor = 'var(--accent-primary)';
-                    e.currentTarget.style.color = 'white';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isRefreshing) {
-                    e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                    e.currentTarget.style.color = 'var(--text-muted)';
-                  }
-                }}
               >
-                <RotateCw 
-                  size={12} 
-                  style={{
-                    animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
-                    color: isRefreshing ? 'var(--accent-primary)' : 'inherit'
-                  }}
-                />
+                <RotateCw size={12} />
               </button>
             )}
             {onDeleteShow && (
-              <button 
-                className="card-delete-btn" 
+              <button
+                className="card-delete-btn"
                 onClick={(e) => {
                   e.stopPropagation();
                   onDeleteShow(show.id);
                 }}
                 title="Delete from Database"
                 aria-label="Delete title"
-                style={{
-                  background: 'rgba(0, 0, 0, 0.5)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  color: 'var(--text-muted)',
-                  borderRadius: '50%',
-                  width: '24px',
-                  height: '24px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.9)';
-                  e.currentTarget.style.borderColor = '#ef4444';
-                  e.currentTarget.style.color = 'white';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                  e.currentTarget.style.color = 'var(--text-muted)';
-                }}
               >
                 <Trash2 size={12} />
               </button>
@@ -226,8 +136,8 @@ export default function ShowCard({
         <p className="card-overview" title={overview}>{overview}</p>
         
         <div className="card-genres">
-          {genres.map((genre, idx) => (
-            <span key={idx} className="genre-tag">{genre}</span>
+          {genres.map((genre) => (
+            <span key={genre} className="genre-tag">{genre}</span>
           ))}
         </div>
 
@@ -336,7 +246,7 @@ export default function ShowCard({
             {showSeasonsDrawer && (
               <div className="seasons-drawer">
                 {seasons.map((s, idx) => (
-                  <div key={idx} className="season-row">
+                  <div key={s.season ?? idx} className="season-row">
                     <span className="season-label">{s.season || `Season ${idx + 1}`}</span>
                     <div className="season-scores">
                       {s.criticScore !== null && s.criticScore !== undefined && (
@@ -377,7 +287,7 @@ export default function ShowCard({
               onClick={() => setShowYoutubeMenu(!showYoutubeMenu)}
               title="YouTube Reviews"
             >
-              <MonitorPlay size={15} style={{ color: '#ef4444' }} />
+              <MonitorPlay size={15} style={{ color: 'var(--error)' }} />
               Reviews
               <ChevronDown size={12} />
             </button>
@@ -423,3 +333,5 @@ export default function ShowCard({
     </article>
   );
 }
+
+export default React.memo(ShowCard);

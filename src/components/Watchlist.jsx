@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Clock, CheckCircle, Trash2, Star, MessageSquare, Calendar, X } from 'lucide-react';
+import { formatSieveScore } from '../utils/score.js';
 
 export default function Watchlist({ 
   watchlist = [], 
@@ -69,50 +70,22 @@ export default function Watchlist({
     handleCloseLogModal();
   };
 
-  // Helper to calculate original score
-  const getAverageScore = (show) => {
-    let total = 0;
-    let count = 0;
-    const { ratings } = show;
-    if (ratings.imdb) { total += ratings.imdb / 2; count++; }
-    if (ratings.rottenTomatoesAudience) { total += ratings.rottenTomatoesAudience / 20; count++; }
-    if (ratings.letterboxd) { total += ratings.letterboxd; count++; }
-    else if (show.type === 'tv' && ratings.rottenTomatoes) { total += ratings.rottenTomatoes / 20; count++; }
-    return count > 0 ? (total / count).toFixed(1) : 'N/A';
-  };
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       {/* Sub tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', gap: '2rem' }}>
+      <div className="subtabs">
         <button
-          className="nav-item"
+          className={`subtab ${activeTab === 'towatch' ? 'active' : ''}`}
           id="btn-tab-towatch"
           onClick={() => setActiveTab('towatch')}
-          style={{
-            background: 'none',
-            border: 'none',
-            borderBottom: activeTab === 'towatch' ? '2px solid var(--accent-primary)' : '2px solid transparent',
-            borderRadius: 0,
-            padding: '0.75rem 0.5rem',
-            color: activeTab === 'towatch' ? 'var(--text-primary)' : 'var(--text-secondary)'
-          }}
         >
           <Clock size={16} />
           To Watch ({currentWatchlist.length})
         </button>
         <button
-          className="nav-item"
+          className={`subtab ${activeTab === 'watched' ? 'active' : ''}`}
           id="btn-tab-watched"
           onClick={() => setActiveTab('watched')}
-          style={{
-            background: 'none',
-            border: 'none',
-            borderBottom: activeTab === 'watched' ? '2px solid var(--accent-primary)' : '2px solid transparent',
-            borderRadius: 0,
-            padding: '0.75rem 0.5rem',
-            color: activeTab === 'watched' ? 'var(--text-primary)' : 'var(--text-secondary)'
-          }}
         >
           <CheckCircle size={16} />
           Watched History ({currentHistory.length})
@@ -146,7 +119,7 @@ export default function Watchlist({
                   
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                     <span>Language: {show.language}</span>
-                    <span>Sieve Score: ★ {getAverageScore(show)}</span>
+                    <span>Sieve Score: ★ {formatSieveScore(show)}</span>
                   </div>
 
                   {/* TV Progress Stepper */}
@@ -229,14 +202,13 @@ export default function Watchlist({
                 style={{ flexDirection: 'row', alignItems: 'flex-start', gap: '1.5rem', padding: '1.25rem' }}
                 id={`history-item-${entry.id}`}
               >
-                <div 
-                  className="avatar" 
-                  style={{ 
-                    borderRadius: '8px', 
-                    width: '50px', 
-                    height: '50px', 
-                    fontSize: '1.2rem',
-                    background: entry.language.toLowerCase() === 'tamil' ? 'linear-gradient(135deg, #7c3aed 0%, #1e1b4b 100%)' : 'var(--accent-gradient)'
+                <div
+                  className={`avatar ${entry.language.toLowerCase() === 'tamil' ? 'poster-gradient-tamil' : ''}`}
+                  style={{
+                    borderRadius: '8px',
+                    width: '50px',
+                    height: '50px',
+                    fontSize: '1.2rem'
                   }}
                 >
                   {entry.type === 'movie' ? '🎬' : '📺'}
@@ -245,7 +217,7 @@ export default function Watchlist({
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <h4 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'white', margin: 0 }}>{entry.title}</h4>
+                      <h4 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{entry.title}</h4>
                       {entry.loggedScope && (
                         <span className="tag-type" style={{ fontSize: '0.7rem', padding: '0.15rem 0.4rem' }}>
                           {entry.loggedScope}
@@ -319,7 +291,7 @@ export default function Watchlist({
             
             <form onSubmit={handleSubmitLog} className="modal-body">
               <div style={{ marginBottom: '1.25rem', textAlign: 'center' }}>
-                <h4 style={{ fontSize: '1.25rem', color: 'white', marginBottom: '0.25rem' }}>{selectedShowToLog.title}</h4>
+                <h4 style={{ fontSize: '1.25rem', color: 'var(--text-primary)', marginBottom: '0.25rem' }}>{selectedShowToLog.title}</h4>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                   {selectedShowToLog.year} • {selectedShowToLog.language} • {selectedShowToLog.platform}
                 </p>
