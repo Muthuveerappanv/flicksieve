@@ -257,3 +257,28 @@ class TestLanguageDetection(unittest.TestCase):
 
     def test_unknown_is_none_not_a_guess(self):
         self.assertIsNone(di.detect_language("https://x/y", "A Film Review", None))
+
+
+class TestScrapeCriticSite(unittest.TestCase):
+    def test_stops_when_pagination_repeats(self):
+        calls = []
+        original = di._fetch
+        di._fetch = lambda url, **kw: (calls.append(url), '<a href="https://x/same-review">x</a>')[1]
+        try:
+            di.scrape_critic_site("T", {
+                "template": "https://x/page/{page}/",
+                "link_pattern": r'href="(https://x/[^"]+)"',
+                "max_pages": 9, "tier": "A", "rating": "jsonld", "default_language": None,
+            }, window_days=90)
+        finally:
+            di._fetch = original
+        self.assertLess(len(calls), 9)   # bailed out early
+
+    def test_article_date_from_url_when_metadata_absent(self):
+        self.assertEqual(
+            di._article_date("", "https://www.cinemaexpress.com/tamil/review/2026/Aug/07/dc-movie-review"),
+            "2026-08-07",
+        )
+
+    def test_article_date_prefers_metadata(self):
+        self.assertEqual(di._article_date('"datePublished":"2026-01-15T10:00"', "https://x/2020/Jan/01/y"), "2026-01-15")

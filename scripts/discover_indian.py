@@ -21,6 +21,7 @@ import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date, timedelta
 
 from curl_cffi import requests as creq
 
@@ -377,6 +378,105 @@ def detect_language(url, headline, outlet_default):
             if re.search(pattern, text):
                 return language
     return outlet_default
+
+
+def _article_date(html, url):
+    """Best-effort publish date as YYYY-MM-DD."""
+    for pattern in (
+        r'"datePublished"\s*:\s*"(\d{4}-\d{2}-\d{2})',
+        r'property="article:published_time"\s+content="(\d{4}-\d{2}-\d{2})',
+    ):
+        match = re.search(pattern, html or "")
+        if match:
+            return match.group(1)
+    match = re.search(r"/(\d{4})/(\w{3})/(\d{2})/", url or "")
+    if match:
+        months = {m: i for i, m in enumerate(
+            ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], start=1)}
+        month = months.get(match.group(2).title())
+        if month:
+            return f"{match.group(1)}-{month:02d}-{int(match.group(3)):02d}"
+    return None
+
+
+def _fetch_article(args):
+    outlet, config, url = args
+    html = _fetch(url, timeout=20, retries=1)
+    if not html:
+        return None
+
+    headline = ""
+    match = re.search(r'<meta property="og:title" content="([^"]+)"', html)
+    if match:
+        headline = re.sub(r"&#\d+;|&[a-z]+;", "'", match.group(1))
+
+    film = film_title_from_review(headline) or film_title_from_review(
+        url.rstrip("/").rsplit("/", 1)[-1].replace("-", " ")
+    )
+    if not film:
+        return None
+
+    return {
+        "reviewer": outlet,
+        "tier": config["tier"],
+        "source": "web",
+        "film": film,
+        "filmKey": normalize_title(film),
+        "url": url,
+        "headline": headline,
+        "stars": extract_review_rating(html),
+        "language": detect_language(url, headline, config.get("default_language")),
+        "date": _article_date(html, url),
+    }
+
+
+def scrape_critic_site(outlet, config, window_days=90, workers=6):
+    """Collect reviews from one outlet's paginated section. Never raises."""
+    urls = []
+    for page in range(1, config["max_pages"] + 1):
+        target = config["template"].format(page=page)
+        html = _fetch(target, timeout=25, retries=2)
+        if not html:
+            break
+        found = re.findall(config["link_pattern"], html)
+        new = [u for u in dict.fromkeys(found) if u not in urls]
+        if not new:
+            break          # pagination exhausted or repeating
+        urls.extend(new)
+        time.sleep(0.25)
+
+    cutoff = (date.today() - timedelta(days=window_days)).isoformat()
+    reviews = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for entry in pool.map(_fetch_article, [(outlet, config, u) for u in urls]):
+            if entry and (entry["date"] is None or entry["date"] >= cutoff):
+                reviews.append(entry)
+    return reviews
+
+
+def scrape_all_critic_sites(window_days=90, languages=None, outlets=None):
+    """Scrape every configured outlet. Returns (reviews, failed_outlets)."""
+    selected = outlets or list(CRITIC_SITES)
+    reviews, failed = [], []
+
+    def one(name):
+        try:
+            return name, scrape_critic_site(name, CRITIC_SITES[name], window_days)
+        except Exception:
+            return name, None
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        for name, result in pool.map(one, selected):
+            if result:
+                reviews.extend(result)
+            else:
+                failed.append(name)
+
+    if languages:
+        wanted = {l.title() for l in languages}
+        reviews = [r for r in reviews if r["language"] in wanted or r["language"] is None]
+    return reviews, failed
 
 
 def scrape_critics(max_articles=12):
