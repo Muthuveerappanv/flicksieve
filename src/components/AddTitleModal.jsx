@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { Film, Tv, Trash, Plus, Search, AlertTriangle, X } from 'lucide-react';
 import { fetchLetterboxd, fetchRottenTomatoes, searchImdb, fetchImdbDetails } from '../utils/api';
 
-export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
+export default function AddTitleModal({ isOpen, onClose, onAddShow, defaultType = 'movie' }) {
   // Add Movie / TV Series Form State
   const [showTitle, setShowTitle] = useState('');
-  const [showType, setShowType] = useState('movie');
+  const [showType, setShowType] = useState(defaultType || 'movie');
+  const [totalSeasons, setTotalSeasons] = useState('');
+  const [seasonsData, setSeasonsData] = useState([]);
   const [showLanguage, setShowLanguage] = useState('Tamil');
   const [customLanguage, setCustomLanguage] = useState('');
   const [showYear, setShowYear] = useState(new Date().getFullYear());
@@ -24,6 +26,13 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
   const [letterboxdSlug, setLetterboxdSlug] = useState('');
   const [rottenTomatoesUrl, setRottenTomatoesUrl] = useState('');
 
+  // Update showType when defaultType changes or modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      setShowType(defaultType || 'movie');
+    }
+  }, [isOpen, defaultType]);
+
   // Smart Autofill State
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -40,6 +49,16 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
     try {
       const matches = await searchImdb(searchQuery.trim());
       if (matches && matches.length > 0) {
+        // If current modal is in TV mode, sort TV series to the top
+        if (showType === 'tv') {
+          matches.sort((a, b) => {
+            const aIsTv = a.type === 'tvSeries' || a.type === 'tvMiniSeries';
+            const bIsTv = b.type === 'tvSeries' || b.type === 'tvMiniSeries';
+            if (aIsTv && !bIsTv) return -1;
+            if (!aIsTv && bIsTv) return 1;
+            return 0;
+          });
+        }
         setSearchResults(matches);
       } else {
         setSearchError('No titles found on IMDb matching your search query.');
@@ -59,7 +78,7 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
     // Normalize fields from search result
     const title = result.title || result.primaryTitle || '';
     const year = result.year || result.startYear || '';
-    const isTv = result.type === 'tvSeries' || result.type === 'tvMiniSeries' || result.type === 'tv';
+    const isTv = result.type === 'tvSeries' || result.type === 'tvMiniSeries' || result.type === 'tv' || showType === 'tv';
     
     setShowTitle(title);
     setShowType(isTv ? 'tv' : 'movie');
@@ -76,12 +95,14 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
     setRatingRT('');
     setRatingRTAudience('');
     setRottenTomatoesUrl('');
+    setTotalSeasons('');
+    setSeasonsData([]);
 
     // Run all 3 rating lookups concurrently in parallel
     try {
       const [imdbRes, lbRes, rtRes] = await Promise.allSettled([
         fetchImdbDetails(result.id, title, year),
-        fetchLetterboxd(title, year, result.id),
+        fetchLetterboxd(title, year, result.id, isTv),
         fetchRottenTomatoes(title, year, isTv)
       ]);
 
@@ -104,6 +125,9 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
         }
         if (imdbData.releaseDate) {
           setShowReleaseDate(imdbData.releaseDate);
+        }
+        if (imdbData.totalSeasons) {
+          setTotalSeasons(imdbData.totalSeasons.toString());
         }
         if (imdbData.posterUrl && !result.posterUrl && !result.primaryImage?.url) {
           setPosterUrl(imdbData.posterUrl);
@@ -151,6 +175,10 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
         if (rtData.url) {
           setRottenTomatoesUrl(rtData.url);
         }
+        if (rtData.seasons && rtData.seasons.length > 0) {
+          setSeasonsData(rtData.seasons);
+          setTotalSeasons(prev => prev || rtData.seasons.length.toString());
+        }
       }
     } catch (err) {
       console.error('Error fetching title details:', err);
@@ -187,6 +215,8 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
         rottenTomatoesAudience: ratingRTAudience ? parseInt(ratingRTAudience, 10) : null,
         letterboxd: ratingLboxd ? parseFloat(ratingLboxd) : null
       },
+      totalSeasons: totalSeasons ? parseInt(totalSeasons, 10) : (seasonsData.length > 0 ? seasonsData.length : null),
+      seasons: seasonsData || [],
       posterUrl: posterUrl.trim() || null,
       imdbId: imdbId.trim() || null,
       letterboxdSlug: letterboxdSlug.trim() || null,
@@ -205,6 +235,8 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
     setRatingRT('');
     setRatingRTAudience('');
     setRatingLboxd('');
+    setTotalSeasons('');
+    setSeasonsData([]);
     setTrailerUrl('');
     setCustomLanguage('');
     setCustomPlatform('');
@@ -358,6 +390,34 @@ export default function AddTitleModal({ isOpen, onClose, onAddShow }) {
                 onChange={(e) => setShowYear(parseInt(e.target.value, 10))}
               />
             </div>
+
+            {showType === 'tv' && (
+              <div className="form-group">
+                <label className="form-label" htmlFor="modal-show-seasons">Total Seasons</label>
+                <input
+                  type="number"
+                  id="modal-show-seasons"
+                  className="form-input"
+                  min="1"
+                  placeholder="e.g. 5"
+                  value={totalSeasons}
+                  onChange={(e) => setTotalSeasons(e.target.value)}
+                />
+              </div>
+            )}
+
+            {showType === 'tv' && seasonsData.length > 0 && (
+              <div className="form-group form-col-full" style={{ padding: '0.5rem 0.75rem', background: 'rgba(var(--accent-primary-rgb), 0.1)', border: '1px solid rgba(var(--accent-primary-rgb), 0.25)', borderRadius: 'var(--radius-md)', fontSize: '0.8rem' }}>
+                <span style={{ fontWeight: 600, color: 'var(--accent-primary)' }}>✨ Rotten Tomatoes Season Ratings Loaded:</span>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.35rem' }}>
+                  {seasonsData.map((s, idx) => (
+                    <span key={idx} style={{ background: 'var(--bg-tertiary)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem' }}>
+                      {s.season}: {s.criticScore !== null ? `🍅 ${s.criticScore}%` : ''} {s.audienceScore !== null ? `🍿 ${s.audienceScore}%` : ''}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="form-group">
               <label className="form-label" htmlFor="modal-show-lang">Language</label>

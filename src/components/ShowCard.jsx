@@ -14,6 +14,7 @@ export default function ShowCard({
   const [showYoutubeMenu, setShowYoutubeMenu] = useState(false);
   const menuRef = useRef(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showSeasonsDrawer, setShowSeasonsDrawer] = useState(false);
 
   // Close YouTube dropdown on click outside
   useEffect(() => {
@@ -26,7 +27,7 @@ export default function ShowCard({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const { title, type, language, year, genres, overview, ratings, platform, youtubeTrailer, posterUrl, imdbId, letterboxdSlug, rottenTomatoesUrl } = show;
+  const { title, type, language, year, genres, overview, ratings, platform, youtubeTrailer, posterUrl, imdbId, letterboxdSlug, rottenTomatoesUrl, totalSeasons, yearSpan, seasons } = show;
 
   // Calculate Sieve Score out of 5
   const calculateSieveScore = () => {
@@ -41,9 +42,22 @@ export default function ShowCard({
       total += ratings.rottenTomatoesAudience / 20; // Convert 100-scale to 5-scale
       count++;
     }
-    if (ratings.letterboxd !== undefined && ratings.letterboxd !== null) {
-      total += ratings.letterboxd; // Already 5-scale
-      count++;
+
+    if (type === 'tv') {
+      // For TV: Use RT Critic score as the 3rd pillar (or Letterboxd if present, e.g. miniseries)
+      if (ratings.letterboxd !== undefined && ratings.letterboxd !== null) {
+        total += ratings.letterboxd;
+        count++;
+      } else if (ratings.rottenTomatoes !== undefined && ratings.rottenTomatoes !== null) {
+        total += ratings.rottenTomatoes / 20;
+        count++;
+      }
+    } else {
+      // For Movie: Use Letterboxd
+      if (ratings.letterboxd !== undefined && ratings.letterboxd !== null) {
+        total += ratings.letterboxd; // Already 5-scale
+        count++;
+      }
     }
 
     if (count === 0) return 'N/A';
@@ -71,7 +85,7 @@ export default function ShowCard({
   });
 
   const handleYoutubeReviewSearch = (reviewerName) => {
-    const query = encodeURIComponent(`${reviewerName} ${title} review`);
+    const query = encodeURIComponent(`${reviewerName} ${title} ${type === 'tv' ? 'series ' : ''}review`);
     window.open(`https://www.youtube.com/results?search_query=${query}`, '_blank');
     setShowYoutubeMenu(false);
   };
@@ -96,6 +110,11 @@ export default function ShowCard({
               {type === 'movie' ? <Film size={12} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'text-top' }} /> : <Tv size={12} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'text-top' }} />}
               {type === 'movie' ? 'Movie' : 'Series'}
             </span>
+            {type === 'tv' && (totalSeasons || (seasons && seasons.length > 0)) && (
+              <span className="tag-platform" style={{ background: 'rgba(255, 255, 255, 0.15)', color: 'var(--text-primary)' }}>
+                {(totalSeasons || seasons.length) === 1 ? '1 Season' : `${totalSeasons || seasons.length} Seasons`}
+              </span>
+            )}
             {((sieveScore !== 'N/A' && parseFloat(sieveScore) <= minSieveScore) || (sieveScore === 'N/A' && !includeUnrated)) && (
               <span className="tag-type" style={{ backgroundColor: 'rgba(239, 68, 68, 0.85)', color: 'white', fontWeight: 600 }}>
                 Sieved Out
@@ -193,7 +212,7 @@ export default function ShowCard({
         </div>
         <div className="card-title-meta">
           <div className="card-year-lang">
-            <span>{year}</span>
+            <span>{yearSpan || year}</span>
             <span className={`lang-badge ${isNative ? 'lang-native-badge' : ''}`}>
               {language} {isNative && '• Native'}
             </span>
@@ -236,26 +255,24 @@ export default function ShowCard({
                 href={rottenTomatoesUrl || `https://www.rottentomatoes.com/search?search=${encodeURIComponent(title)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rating-item rating-clickable tooltip-container" 
+                className="rating-item rating-clickable" 
+                title="Popcornmeter (Audience Score)"
                 style={{ textDecoration: 'none' }}
               >
-                <span className="rating-source-label">RT</span>
+                <span className="rating-source-label">{type === 'tv' ? 'RT (Aud)' : 'RT'}</span>
                 <span className="rating-value">
                   <Star size={12} fill="currentColor" />
                   {ratings.rottenTomatoesAudience}%
                 </span>
-                {ratings.rottenTomatoes && (
-                  <span className="tooltip-text">
-                    Critics Score: {ratings.rottenTomatoes}%
-                  </span>
-                )}
               </a>
-            ) : ratings.rottenTomatoes ? (
+            ) : null}
+            {ratings.rottenTomatoes && (type === 'tv' || !ratings.rottenTomatoesAudience) ? (
               <a 
                 href={rottenTomatoesUrl || `https://www.rottentomatoes.com/search?search=${encodeURIComponent(title)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rating-item rating-clickable" 
+                title="Tomatometer (Critics Score)"
                 style={{ textDecoration: 'none' }}
               >
                 <span className="rating-source-label">RT (Crit)</span>
@@ -297,6 +314,48 @@ export default function ShowCard({
             </span>
           </div>
         </section>
+
+        {/* TV Season Ratings Breakdown */}
+        {type === 'tv' && seasons && seasons.length > 0 && (
+          <div className="seasons-breakdown-container">
+            <button
+              type="button"
+              className="seasons-toggle-btn"
+              onClick={() => setShowSeasonsDrawer(!showSeasonsDrawer)}
+              title="View Rotten Tomatoes season-by-season ratings"
+            >
+              <span>📊 Season Ratings ({seasons.length})</span>
+              <ChevronDown 
+                size={14} 
+                style={{ 
+                  transform: showSeasonsDrawer ? 'rotate(180deg)' : 'none', 
+                  transition: 'transform 0.2s' 
+                }} 
+              />
+            </button>
+            {showSeasonsDrawer && (
+              <div className="seasons-drawer">
+                {seasons.map((s, idx) => (
+                  <div key={idx} className="season-row">
+                    <span className="season-label">{s.season || `Season ${idx + 1}`}</span>
+                    <div className="season-scores">
+                      {s.criticScore !== null && s.criticScore !== undefined && (
+                        <span className="season-score critic" title="Tomatometer (Critics)">
+                          🍅 {s.criticScore}%
+                        </span>
+                      )}
+                      {s.audienceScore !== null && s.audienceScore !== undefined && (
+                        <span className="season-score audience" title="Popcornmeter (Audience)">
+                          🍿 {s.audienceScore}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Card Footer Actions */}
         <div className="card-actions">

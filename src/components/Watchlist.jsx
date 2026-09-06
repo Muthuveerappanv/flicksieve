@@ -6,7 +6,9 @@ export default function Watchlist({
   onRemoveFromWatchlist,
   watchedHistory = [],
   onAddToHistory,
-  onRemoveFromHistory
+  onRemoveFromHistory,
+  onUpdateWatchlistShow,
+  mediaType = 'movie'
 }) {
   const [activeTab, setActiveTab] = useState('towatch'); // 'towatch' or 'watched'
   const [showLogModal, setShowLogModal] = useState(false);
@@ -16,12 +18,23 @@ export default function Watchlist({
   const [userRating, setUserRating] = useState(5);
   const [userReview, setUserReview] = useState('');
   const [watchDate, setWatchDate] = useState(new Date().toISOString().split('T')[0]);
+  const [logScope, setLogScope] = useState('full'); // 'full' or 'season'
+
+  // Filter lists strictly by active mediaType
+  const currentWatchlist = React.useMemo(() => {
+    return watchlist.filter(item => (item.type || 'movie') === mediaType);
+  }, [watchlist, mediaType]);
+
+  const currentHistory = React.useMemo(() => {
+    return watchedHistory.filter(item => (item.type || 'movie') === mediaType);
+  }, [watchedHistory, mediaType]);
 
   const handleOpenLogModal = (show) => {
     setSelectedShowToLog(show);
     setUserRating(5);
     setUserReview('');
     setWatchDate(new Date().toISOString().split('T')[0]);
+    setLogScope(show.type === 'tv' ? 'season' : 'full');
     setShowLogModal(true);
   };
 
@@ -34,16 +47,25 @@ export default function Watchlist({
     e.preventDefault();
     if (!selectedShowToLog) return;
 
+    const isTv = selectedShowToLog.type === 'tv';
+    const scopeLabel = isTv && logScope === 'season' 
+      ? `Season ${selectedShowToLog.currentSeason || 1}` 
+      : (isTv ? 'Full Series' : '');
+
     const logEntry = {
       ...selectedShowToLog,
       loggedRating: userRating,
       loggedReview: userReview,
       loggedDate: watchDate,
+      loggedScope: scopeLabel,
       logId: `${selectedShowToLog.id}-${Date.now()}`
     };
 
     onAddToHistory(logEntry);
-    onRemoveFromWatchlist(selectedShowToLog.id); // Remove from 'to watch' after marking watched
+    // For movies or full series, remove from to-watch; for single season logs, keep show in watchlist
+    if (!isTv || logScope === 'full') {
+      onRemoveFromWatchlist(selectedShowToLog.id);
+    }
     handleCloseLogModal();
   };
 
@@ -55,6 +77,7 @@ export default function Watchlist({
     if (ratings.imdb) { total += ratings.imdb / 2; count++; }
     if (ratings.rottenTomatoesAudience) { total += ratings.rottenTomatoesAudience / 20; count++; }
     if (ratings.letterboxd) { total += ratings.letterboxd; count++; }
+    else if (show.type === 'tv' && ratings.rottenTomatoes) { total += ratings.rottenTomatoes / 20; count++; }
     return count > 0 ? (total / count).toFixed(1) : 'N/A';
   };
 
@@ -76,7 +99,7 @@ export default function Watchlist({
           }}
         >
           <Clock size={16} />
-          To Watch ({watchlist.length})
+          To Watch ({currentWatchlist.length})
         </button>
         <button
           className="nav-item"
@@ -92,21 +115,21 @@ export default function Watchlist({
           }}
         >
           <CheckCircle size={16} />
-          Watched History ({watchedHistory.length})
+          Watched History ({currentHistory.length})
         </button>
       </div>
 
       {activeTab === 'towatch' ? (
         // TO WATCH GRID
-        watchlist.length === 0 ? (
+        currentWatchlist.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">🍿</div>
-            <h3>Watchlist is Empty</h3>
+            <div className="empty-icon">{mediaType === 'tv' ? '📺' : '🍿'}</div>
+            <h3>{mediaType === 'tv' ? 'TV Watchlist is Empty' : 'Movie Watchlist is Empty'}</h3>
             <p>Go to the Recommendations feed and hit the Watchlist button to add titles here!</p>
           </div>
         ) : (
           <div className="shows-grid">
-            {watchlist.map(show => (
+            {currentWatchlist.map(show => (
               <div className="show-card" key={show.id} id={`watchlist-item-${show.id}`}>
                 <div className={`card-poster ${show.language.toLowerCase() === 'tamil' ? 'poster-gradient-tamil' : show.language.toLowerCase() === 'malayalam' ? 'poster-gradient-malayalam' : show.language.toLowerCase() === 'english' ? 'poster-gradient-english' : show.language.toLowerCase() === 'hindi' ? 'poster-gradient-hindi' : 'poster-gradient-other'}`} style={{ height: '110px' }}>
                   <div className="card-top-tags">
@@ -125,6 +148,44 @@ export default function Watchlist({
                     <span>Language: {show.language}</span>
                     <span>Sieve Score: ★ {getAverageScore(show)}</span>
                   </div>
+
+                  {/* TV Progress Stepper */}
+                  {show.type === 'tv' && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.04)', padding: '0.4rem 0.6rem', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        Progress: <strong style={{ color: 'var(--accent-primary)' }}>S{show.currentSeason || 1} E{show.currentEpisode || 1}</strong>
+                        {show.totalSeasons ? ` (${show.totalSeasons} seasons)` : ''}
+                      </span>
+                      {onUpdateWatchlistShow && (
+                        <div style={{ display: 'flex', gap: '0.25rem' }}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ padding: '0.15rem 0.45rem', fontSize: '0.7rem', height: 'auto' }}
+                            title="Next Episode"
+                            onClick={() => {
+                              const nextEp = (show.currentEpisode || 1) + 1;
+                              onUpdateWatchlistShow({ ...show, currentEpisode: nextEp, currentSeason: show.currentSeason || 1 });
+                            }}
+                          >
+                            +1 Ep
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ padding: '0.15rem 0.45rem', fontSize: '0.7rem', height: 'auto' }}
+                            title="Next Season"
+                            onClick={() => {
+                              const nextS = (show.currentSeason || 1) + 1;
+                              onUpdateWatchlistShow({ ...show, currentSeason: nextS, currentEpisode: 1 });
+                            }}
+                          >
+                            +1 Season
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                     <button
@@ -153,15 +214,15 @@ export default function Watchlist({
         )
       ) : (
         // WATCHED HISTORY LIST
-        watchedHistory.length === 0 ? (
+        currentHistory.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">🎬</div>
-            <h3>No Watched History Yet</h3>
+            <div className="empty-icon">{mediaType === 'tv' ? '📺' : '🎬'}</div>
+            <h3>{mediaType === 'tv' ? 'No TV Watched History Yet' : 'No Movie Watched History Yet'}</h3>
             <p>Log shows you've watched from your watchlist to build your rating history!</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {watchedHistory.map(entry => (
+            {currentHistory.map(entry => (
               <div 
                 className="channel-item" 
                 key={entry.logId} 
@@ -183,7 +244,14 @@ export default function Watchlist({
 
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h4 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'white' }}>{entry.title}</h4>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <h4 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'white', margin: 0 }}>{entry.title}</h4>
+                      {entry.loggedScope && (
+                        <span className="tag-type" style={{ fontSize: '0.7rem', padding: '0.15rem 0.4rem' }}>
+                          {entry.loggedScope}
+                        </span>
+                      )}
+                    </div>
                     <div style={{ display: 'flex', gap: '0.25rem', color: 'var(--rating-gold)' }}>
                       {[...Array(5)].map((_, i) => (
                         <Star 
@@ -256,6 +324,35 @@ export default function Watchlist({
                   {selectedShowToLog.year} • {selectedShowToLog.language} • {selectedShowToLog.platform}
                 </p>
               </div>
+
+              {selectedShowToLog.type === 'tv' && (
+                <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                  <label className="form-label">Log Scope</label>
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
+                    <button
+                      type="button"
+                      className={`pill ${logScope === 'season' ? 'active' : ''}`}
+                      onClick={() => setLogScope('season')}
+                      style={{ flex: 1, textAlign: 'center' }}
+                    >
+                      Season {selectedShowToLog.currentSeason || 1}
+                    </button>
+                    <button
+                      type="button"
+                      className={`pill ${logScope === 'full' ? 'active' : ''}`}
+                      onClick={() => setLogScope('full')}
+                      style={{ flex: 1, textAlign: 'center' }}
+                    >
+                      Full Series
+                    </button>
+                  </div>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                    {logScope === 'season' 
+                      ? 'Logs this season and keeps the series in your active watchlist.' 
+                      : 'Logs the complete series and marks it finished.'}
+                  </span>
+                </div>
+              )}
 
               <div className="form-group" style={{ marginBottom: '1.25rem' }}>
                 <label className="form-label">Your Rating (1 - 5 Stars)</label>

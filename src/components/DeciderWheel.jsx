@@ -300,11 +300,15 @@ export default function DeciderWheel({
               </div>
               <div className="sieve-score-value" style={{ fontSize: '1.25rem' }}>
                 <Star size={18} fill="currentColor" />
-                {(( (selectedShow.ratings.imdb ? selectedShow.ratings.imdb / 2 : 0) + 
-                    (selectedShow.ratings.rottenTomatoes ? selectedShow.ratings.rottenTomatoes / 20 : 0) + 
-                    (selectedShow.ratings.letterboxd ? selectedShow.ratings.letterboxd : 0)
-                   ) / [selectedShow.ratings.imdb, selectedShow.ratings.rottenTomatoes, selectedShow.ratings.letterboxd].filter(Boolean).length
-                 ).toFixed(2)}
+                {(() => {
+                  let total = 0, count = 0;
+                  const { ratings, type } = selectedShow;
+                  if (ratings?.imdb) { total += ratings.imdb / 2; count++; }
+                  if (ratings?.rottenTomatoesAudience) { total += ratings.rottenTomatoesAudience / 20; count++; }
+                  if (ratings?.letterboxd) { total += ratings.letterboxd; count++; }
+                  else if (type === 'tv' && ratings?.rottenTomatoes) { total += ratings.rottenTomatoes / 20; count++; }
+                  return count > 0 ? (total / count).toFixed(2) : 'N/A';
+                })()}
               </div>
             </div>
             
