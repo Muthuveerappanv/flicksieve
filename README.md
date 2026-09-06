@@ -41,7 +41,7 @@ A premium, interactive media dashboard designed to curate, filter, and track mov
 ## 🚀 Setup & Installation
 
 ### Prerequisites
-- Node.js (v18+)
+- Node.js (v20.19+ or v22.12+)
 - Python (v3.9+)
 
 ### 1. Clone & Setup Project
