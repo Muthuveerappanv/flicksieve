@@ -210,8 +210,10 @@ fn run_letterboxd_scraper(
     query: String,
     year: String,
     imdb_id: String,
+    is_tv: Option<bool>,
 ) -> Result<String, String> {
-    execute_python_script(app, "fetch_letterboxd.py", vec![&query, &year, &imdb_id])
+    let is_tv_str = if is_tv.unwrap_or(false) { "true" } else { "false" };
+    execute_python_script(app, "fetch_letterboxd.py", vec![&query, &year, &imdb_id, is_tv_str])
 }
 
 #[tauri::command]
@@ -219,9 +221,9 @@ fn run_rottentomatoes_scraper(
     app: tauri::AppHandle,
     query: String,
     year: String,
-    is_tv: bool,
+    is_tv: Option<bool>,
 ) -> Result<String, String> {
-    let is_tv_str = if is_tv { "true" } else { "false" };
+    let is_tv_str = if is_tv.unwrap_or(false) { "true" } else { "false" };
     execute_python_script(
         app,
         "fetch_rottentomatoes.py",
@@ -232,6 +234,32 @@ fn run_rottentomatoes_scraper(
 #[tauri::command]
 fn run_91mobiles_scraper(app: tauri::AppHandle) -> Result<String, String> {
     execute_python_script(app, "scrape_91mobiles.py", vec![])
+}
+
+#[tauri::command]
+fn run_discover_at_home(
+    app: tauri::AppHandle,
+    days: String,
+    min_audience: String,
+    sort: String,
+    media_type: Option<String>,
+) -> Result<String, String> {
+    let media_str = media_type.unwrap_or_else(|| "movie".to_string());
+    execute_python_script(app, "discover_at_home.py", vec![&days, &min_audience, &sort, &media_str])
+}
+
+#[tauri::command]
+fn run_discover_indian(
+    app: tauri::AppHandle,
+    handles: String,
+    max_age_days: String,
+    min_reviewers: String,
+) -> Result<String, String> {
+    execute_python_script(
+        app,
+        "discover_indian.py",
+        vec![&handles, &max_age_days, &min_reviewers],
+    )
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -252,6 +280,8 @@ pub fn run() {
             run_letterboxd_scraper,
             run_rottentomatoes_scraper,
             run_91mobiles_scraper,
+            run_discover_at_home,
+            run_discover_indian,
             get_data_folder,
             set_data_folder,
             load_data_file,
