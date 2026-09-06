@@ -31,7 +31,8 @@
       "../scripts/fetch_rottentomatoes.py",
       "../scripts/scrape_91mobiles.py",
       "../scripts/discover_at_home.py",
-      "../scripts/discover_indian.py"
+      "../scripts/discover_indian.py",
+      "../src/data/reviewers.json"
     ],
     "icon": [
       "icons/32x32.png",

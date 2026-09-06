@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { scoreImdbMatch } from './imdbMatch.js';
 
 export const isTauri = () => typeof window !== 'undefined' && !!window.__TAURI_INTERNALS__;
 
@@ -342,28 +343,7 @@ export async function fetch91Mobiles(onProgress) {
         if (matches.length > 0) {
           let highestScore = -1000;
           for (const m of matches) {
-            let score = 0;
-            const titleEqual = m.primaryTitle.toLowerCase() === show.title.toLowerCase();
-            const titleContains = m.primaryTitle.toLowerCase().includes(show.title.toLowerCase()) || 
-                                  show.title.toLowerCase().includes(m.primaryTitle.toLowerCase());
-            if (titleEqual) score += 100;
-            else if (titleContains) score += 30;
-            
-            if (scrapedYear && m.startYear) {
-              const yearDiff = Math.abs(m.startYear - scrapedYear);
-              if (yearDiff === 0) score += 50;
-              else if (yearDiff === 1) score += 20;
-              else if (yearDiff > 2) score -= 40;
-            }
-            
-            if (scrapedType === 'tv') {
-              if (m.type === 'tvSeries') score += 30;
-              else score -= 30;
-            } else {
-              if (m.type === 'movie') score += 30;
-              else score -= 30;
-            }
-            
+            const score = scoreImdbMatch(m, { title: show.title, year: scrapedYear, type: scrapedType });
             if (score > highestScore) {
               highestScore = score;
               match = m;

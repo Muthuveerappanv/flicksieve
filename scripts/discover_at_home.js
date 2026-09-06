@@ -4,11 +4,12 @@ import path from 'path';
 import url from 'url';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { venvPython } from './dev-api-plugin.js';
 
 const execFilePromise = promisify(execFile);
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
-const pythonPath = path.join(__dirname, '..', '.venv', 'bin', 'python3');
+const pythonPath = venvPython();
 const scriptPath = path.join(__dirname, 'discover_at_home.py');
 const seedPath = path.join(__dirname, '..', 'src', 'data', 'shows.json');
 const jsonOutPath = path.join(__dirname, '..', '.discover-at-home.json');
@@ -36,11 +37,14 @@ function resolveLibraryPath() {
 }
 
 function parseArgs(argv) {
-  const opts = { days: null, minAudience: null, sort: null, json: false };
+  const opts = { days: null, minAudience: null, sort: null, json: false, mediaType: 'movie' };
   for (const arg of argv) {
     if (arg === '--json') opts.json = true;
     else if (arg === '--sort=date' || arg === '--by-date') opts.sort = 'date';
     else if (arg === '--sort=audience') opts.sort = 'audience';
+    else if (arg === '--tv') opts.mediaType = 'tv';
+    else if (arg === '--media-type=tv') opts.mediaType = 'tv';
+    else if (arg === '--media-type=movie') opts.mediaType = 'movie';
     else if (arg.startsWith('--days=')) opts.days = arg.split('=')[1];
     else if (arg.startsWith('--min-audience=')) opts.minAudience = arg.split('=')[1];
   }
@@ -64,6 +68,7 @@ async function main() {
     opts.days || 'None',
     opts.minAudience || 'None',
     opts.sort || 'None',
+    opts.mediaType || 'movie',
   ], { maxBuffer: 20 * 1024 * 1024, timeout: 5 * 60 * 1000 });
 
   const data = JSON.parse(stdout.trim());
@@ -84,7 +89,7 @@ async function main() {
   }
 
   console.log('');
-  console.log(`Rotten Tomatoes — new "at home" movies`);
+  console.log(`Rotten Tomatoes — new "at home" ${opts.mediaType === 'tv' ? 'TV series' : 'movies'}`);
   console.log(`  window: last ${data.windowDays} days   audience >= ${data.minAudience}   sorted by ${data.sortBy === 'date' ? 'streaming date' : 'audience score'}   (${data.pagesCrawled} pages)`);
   console.log(`  library: ${libraryPath}`);
   console.log(`  ${fresh.length} new candidate(s), ${alreadyOwned} already in your library`);

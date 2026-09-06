@@ -1,26 +1,54 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import url from 'url';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { venvPython } from './dev-api-plugin.js';
 
 const execFilePromise = promisify(execFile);
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
-const dbPath = path.join(__dirname, '..', 'src', 'data', 'shows.json');
-const pythonPath = path.join(__dirname, '..', '.venv', 'bin', 'python3');
+const seedPath = path.join(__dirname, '..', 'src', 'data', 'shows.json');
+const pythonPath = venvPython();
 const letterboxdScriptPath = path.join(__dirname, 'fetch_letterboxd.py');
+
+function expandTilde(p) {
+  if (p && p.startsWith('~')) return path.join(os.homedir(), p.slice(1));
+  return p;
+}
+
+// Resolve the live library the same way scripts/discover_at_home.js does:
+// ~/.flicksieve/config.json -> dataFolder -> shows.json, falling back to the seed fixture.
+function resolveLibraryPath() {
+  const configPath = path.join(os.homedir(), '.flicksieve', 'config.json');
+  let dataFolder = path.join(os.homedir(), '.flicksieve');
+  if (fs.existsSync(configPath)) {
+    try {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      if (config && config.dataFolder) dataFolder = expandTilde(config.dataFolder);
+    } catch (err) {
+      console.error('Could not read ~/.flicksieve/config.json:', err.message);
+    }
+  }
+  const livePath = path.join(dataFolder, 'shows.json');
+  if (fs.existsSync(livePath)) return livePath;
+  return seedPath;
+}
+
+const dbPath = resolveLibraryPath();
 
 // Delay helper
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function runLetterboxdScraper(title, year = '', imdbId = '') {
+async function runLetterboxdScraper(title, year = '', imdbId = '', isTv = false) {
   try {
     const { stdout } = await execFilePromise(pythonPath, [
       letterboxdScriptPath,
       title,
       year || 'None',
       imdbId || 'None',
+      isTv ? 'true' : 'false',
     ]);
     return JSON.parse(stdout.trim());
   } catch (err) {
@@ -31,7 +59,8 @@ async function runLetterboxdScraper(title, year = '', imdbId = '') {
 
 async function syncRatings() {
   console.log("Starting IMDb and Letterboxd ratings synchronization...");
-  
+  console.log(`Library: ${dbPath}`);
+
   if (!fs.existsSync(dbPath)) {
     console.error(`Database file not found at ${dbPath}`);
     process.exit(1);
@@ -109,7 +138,7 @@ async function syncRatings() {
     // --- STEP 2: Letterboxd Sync ---
     try {
       console.log(`  Querying Letterboxd for "${show.title}"...`);
-      const lbData = await runLetterboxdScraper(show.title, show.year, imdbId);
+      const lbData = await runLetterboxdScraper(show.title, show.year, imdbId, show.type === 'tv');
       if (lbData && !lbData.error) {
         if (lbData.rating) {
           show.ratings.letterboxd = parseFloat(lbData.rating);

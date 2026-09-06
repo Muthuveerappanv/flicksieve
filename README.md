@@ -28,9 +28,13 @@ A premium, interactive media dashboard designed to curate, filter, and track mov
 
 ## 🛠️ Technology Stack
 
-- **Frontend**: React (v18), Vite, Lucide React (Icons)
+- **Frontend**: React (v19), Vite, Lucide React (Icons)
 - **Styling**: Custom CSS variables, responsive design, glassmorphic accents, and micro-animations.
-- **Backend Scraping**: Node middleware proxy running local Python scripts (`BeautifulSoup`, `requests`, `letterboxdpy`) to retrieve up-to-date scores.
+- **Backend Scraping**: In `npm run dev`, a Vite dev-server plugin (`scripts/dev-api-plugin.js`) exposes the `/api/*` routes and shells out to the local Python scrapers in the project `.venv/`. The packaged Tauri desktop app serves the same routes natively from `src-tauri/src/lib.rs`. Python deps (`requests`, `beautifulsoup4`, `letterboxdpy`, `curl_cffi`) are pinned in `requirements.txt`.
+  - `fetch_letterboxd.py` / `fetch_rottentomatoes.py` — per-title Letterboxd and Rotten Tomatoes ratings (RT includes season-level scores for TV).
+  - `discover_at_home.py` — crawls Rotten Tomatoes "at home" streaming releases (movies or TV) with a strong audience score.
+  - `discover_indian.py` — critic-consensus discovery of Indian-language films from handpicked press outlets.
+  - `scrape_91mobiles.py` — weekly India OTT release calendar.
 
 ---
 
@@ -73,15 +77,19 @@ npm run build
 
 ```
 ├── dist/                     # Optimized build output
-├── scripts/                  # Python scraping scripts
-│   ├── discover_indian.py    # Reviewer-consensus discovery (YouTube + Indian press)
+├── scripts/                  # Scrapers + dev tooling
+│   ├── dev-api-plugin.js     # Vite dev-server plugin serving the /api/* routes
+│   ├── discover_at_home.py   # Rotten Tomatoes "at home" discovery (movies + TV)
+│   ├── discover_at_home.js   # CLI wrapper for the above (npm run discover)
+│   ├── discover_indian.py    # Reviewer-consensus discovery (Indian press + optional YouTube)
 │   ├── fetch_letterboxd.py   # Letterboxd scraper
 │   ├── fetch_rottentomatoes.py # Rotten Tomatoes scraper
 │   ├── sync_ratings.js       # CLI ratings sync script
 │   └── scrape_91mobiles.py   # 91mobiles parser
 ├── src/                      # React frontend
 │   ├── components/           # UI Components (ShowCard, Settings, Wheel, etc.)
-│   ├── data/                 # Initial datasets
+│   ├── data/                 # Initial datasets (seed fixtures, reviewers.json)
+│   ├── utils/                # api.js, score.js, imdbMatch.js
 │   ├── App.jsx               # Main container and state manager
 │   ├── index.css             # Unified design system & custom themes
 │   └── main.jsx              # React mounting root
@@ -89,6 +97,22 @@ npm run build
 ├── vite.config.js            # Vite configuration & server middleware proxies
 └── README.md                 # Project documentation
 ```
+
+---
+
+## ⚠️ Known limitations
+
+- **Scrapers in packaged builds run on system `python3` with no dependency bundling.**
+  `npm run dev` and `npm run tauri dev` use the project `.venv/`, which the postinstall
+  script populates from `requirements.txt`. A distributed (bundled) `.app` / installer
+  bundles only the scraper source files — it falls back to the system `python3` on
+  `PATH` and does **not** ship a virtualenv. For the scrapers to work outside the dev
+  commands, the target machine needs `python3` plus the `requirements.txt` packages
+  installed into a discoverable environment (e.g. `pip install -r requirements.txt`).
+  Bundling the venv into the distributable is out of scope.
+- `discover_indian.py` resolves `reviewers.json` from `src/data/` in the dev tree or the
+  bundled resource dir; set `FLICKSIEVE_REVIEWERS=/path/to/reviewers.json` to override.
+  If none is found it falls back to a small built-in handle list.
 
 ---
 
