@@ -1,6 +1,9 @@
 import sys
 import json
+import re
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor
+
 import requests
 from bs4 import BeautifulSoup
 
@@ -118,7 +121,6 @@ def fetch_rottentomatoes_score(query, year=None, is_tv=False):
 
                         # Fetch audience scores for each season in parallel
                         if raw_seasons:
-                            from concurrent.futures import ThreadPoolExecutor
                             def _fetch_season_aud(s):
                                 if not s.get('href'):
                                     return s
@@ -146,7 +148,6 @@ def fetch_rottentomatoes_score(query, year=None, is_tv=False):
                                 seasons_list = list(pool.map(_fetch_season_aud, raw_seasons))
 
                             # Sort seasons numerically (Season 1, Season 2, etc.)
-                            import re
                             def _season_sort_key(item):
                                 m = re.search(r'\d+', item.get('season', ''))
                                 return int(m.group(0)) if m else 999
