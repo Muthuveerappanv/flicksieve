@@ -148,7 +148,7 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 3rem;
+  margin-bottom: 1.25rem;
   text-decoration: none;
 }
 
@@ -164,6 +164,49 @@ h1, h2, h3, h4, h5, h6 {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   font-family: var(--font-display);
+}
+
+/* Media Mode Switcher (Movies vs TV Shows) */
+.media-mode-switcher {
+  display: flex;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 4px;
+  gap: 4px;
+  margin-bottom: 1.5rem;
+}
+
+.media-mode-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: calc(var(--radius-md) - 2px);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.media-mode-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.media-mode-btn.active {
+  color: white;
+  background: var(--accent-gradient);
+  box-shadow: 0 2px 10px rgba(var(--accent-primary-rgb), 0.35);
+}
+
+.media-mode-btn-icon {
+  font-size: 1rem;
 }
 
 .nav-menu {
@@ -1722,4 +1765,298 @@ h1, h2, h3, h4, h5, h6 {
 .theme-desc {
   font-size: 0.7rem;
   color: var(--text-muted);
+}
+
+/* TV Shows Season Ratings Breakdown */
+.seasons-breakdown-container {
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--border-color);
+  padding-top: 0.5rem;
+}
+
+.seasons-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.seasons-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+}
+
+.seasons-drawer {
+  margin-top: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 0.4rem;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.season-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.4rem;
+  border-radius: var(--radius-xs, 4px);
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 0.72rem;
+}
+
+.season-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.season-label {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.season-scores {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.season-score {
+  font-weight: 600;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+.season-score.critic {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.season-score.audience {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+/* --- Sieve India discovery --- */
+.discover-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 16px 0 20px;
+}
+
+.language-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.chip {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color, #333);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.18s ease;
+}
+
+.chip:hover { border-color: var(--accent-primary, #a855f7); }
+
+.chip-active {
+  background: var(--accent-primary, #a855f7);
+  border-color: var(--accent-primary, #a855f7);
+  color: #fff;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+.control-inline { flex-direction: row; align-items: center; gap: 6px; }
+
+.discover-meta {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+  opacity: 0.8;
+  margin-bottom: 12px;
+}
+
+.discover-meta .warn { color: #f59e0b; }
+
+.discover-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.discover-grid { display: flex; flex-direction: column; gap: 10px; }
+
+.discover-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid var(--border-color, #2a2a2a);
+  border-radius: 12px;
+  transition: border-color 0.18s ease;
+}
+
+.discover-row:hover { border-color: var(--accent-primary, #a855f7); }
+.discover-row.is-existing { opacity: 0.5; }
+
+.discover-poster {
+  width: 56px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.discover-info { flex: 1; min-width: 0; }
+
+.discover-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.discover-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  margin-bottom: 5px;
+}
+
+.discover-scores {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+}
+
+.discover-overview {
+  font-size: 0.82rem;
+  opacity: 0.72;
+  margin: 6px 0 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.link-button:hover { color: var(--accent-primary, #a855f7); }
+
+.badge {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--border-color, #333);
+}
+
+.error-banner {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+}
+
+.reviewer-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  opacity: 0.85;
+  width: 100%;
+}
+
+.consensus-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(168, 85, 247, 0.15);
+  color: var(--accent-primary, #a855f7);
+  margin-bottom: 6px;
+}
+.consensus-badge[data-strength="2"] {
+  background: rgba(168, 85, 247, 0.25);
+}
+.consensus-badge[data-strength="3"] {
+  background: rgba(168, 85, 247, 0.35);
+}
+
+.reviewer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.reviewer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #333);
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.reviewer-chip:hover {
+  border-color: var(--accent-primary, #a855f7);
+  background: rgba(168, 85, 247, 0.1);
+}
+.reviewer-chip.is-press {
+  border-style: dashed;
+}
+
+.context-ratings {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.75rem;
+  opacity: 0.6;
 }
