@@ -48,3 +48,18 @@ class TestFilmTitleFromReview(unittest.TestCase):
     def test_normalize_matches_across_casing_and_punctuation(self):
         self.assertEqual(di.normalize_title("I'M GAME"), di.normalize_title("i'm game"))
         self.assertEqual(di.normalize_title("Vishwanath & Sons"), di.normalize_title("Vishwanath and Sons"))
+
+
+class TestMetadataParsing(unittest.TestCase):
+    def test_view_counts(self):
+        self.assertEqual(di.parse_view_count("416K views"), 416000)
+        self.assertEqual(di.parse_view_count("1.5M views"), 1500000)
+        self.assertEqual(di.parse_view_count("973 views"), 973)
+        self.assertIsNone(di.parse_view_count("no views here"))
+
+    def test_relative_dates(self):
+        self.assertEqual(di.parse_relative_date("1 day ago"), 1)
+        self.assertEqual(di.parse_relative_date("2 weeks ago"), 14)
+        self.assertEqual(di.parse_relative_date("3 months ago"), 90)
+        self.assertEqual(di.parse_relative_date("2 years ago"), 730)
+        self.assertIsNone(di.parse_relative_date("416K views"))

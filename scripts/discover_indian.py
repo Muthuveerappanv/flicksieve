@@ -63,3 +63,28 @@ def normalize_title(title):
         return ""
     text = title.lower().replace("&", " and ")
     return re.sub(r"[^a-z0-9]", "", text)
+
+
+_UNIT_DAYS = {"day": 1, "week": 7, "month": 30, "year": 365, "hour": 0, "minute": 0, "second": 0}
+
+
+def parse_view_count(text):
+    """'416K views' -> 416000."""
+    if not text:
+        return None
+    m = re.search(r"([\d.]+)\s*([KMB])?\s*views", text, re.I)
+    if not m:
+        return None
+    value = float(m.group(1))
+    suffix = (m.group(2) or "").upper()
+    return int(value * {"K": 1_000, "M": 1_000_000, "B": 1_000_000_000}.get(suffix, 1))
+
+
+def parse_relative_date(text):
+    """'2 weeks ago' -> 14 (days)."""
+    if not text:
+        return None
+    m = re.search(r"(\d+)\s*(second|minute|hour|day|week|month|year)s?\s+ago", text, re.I)
+    if not m:
+        return None
+    return int(m.group(1)) * _UNIT_DAYS[m.group(2).lower()]
