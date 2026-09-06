@@ -2060,3 +2060,44 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 0.75rem;
   opacity: 0.6;
 }
+
+.verdict-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+}
+
+.verdict-stars {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--accent-primary, #a855f7);
+}
+
+.verdict-count {
+  font-size: 0.78rem;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--border-color, #2a2a2a);
+}
+
+.reviewer-chip.is-press {
+  border-color: rgba(168, 85, 247, 0.4);
+}
+
+.tag-language {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary, #a3a3a3);
+}
+
+.rating-slider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+}
+
+.rating-slider input[type="range"] { width: 120px; }
