@@ -332,6 +332,11 @@ class TestCriticScore(unittest.TestCase):
         few = di.critic_score(3.5, 1, 0, 10)
         self.assertGreater(many, few)
 
+    def test_multi_critic_beats_lone_high_rating(self):
+        self.assertGreater(di.critic_score(3.5, 2, 0, 10), di.critic_score(4.5, 1, 0, 10))
+        self.assertGreater(di.critic_score(4.0, 3, 0, 10), di.critic_score(4.0, 1, 0, 10))
+        self.assertIsInstance(di.critic_score(None, 2, 0, 10), float)
+
     def test_youtube_is_a_bonus_not_a_requirement(self):
         with_yt = di.critic_score(3.5, 2, 3, 10)
         without = di.critic_score(3.5, 2, 0, 10)

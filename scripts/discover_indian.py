@@ -545,9 +545,9 @@ def reviewer_score(reviewer_count, total_views, critic_stars, age_days):
     return round(score, 3)
 
 
-# Critic stars dominate; critic count corroborates; YouTube is a bonus.
+# Critic consensus dominates; critic stars reward quality; YouTube is a bonus.
 W_STARS = 1.6          # per star, 0-5 -> 0-8
-W_CRITIC_COUNT = 0.9
+W_CRITIC_COUNT = 2.5
 W_YOUTUBE_BONUS = 0.4
 W_UNRATED_COVERAGE = 0.5
 W_AGE = 0.4
