@@ -6,6 +6,8 @@ const ToastContext = createContext(null);
  * Provides the app-wide toast queue plus a stable `triggerToast(message, type)`
  * callback. Renders its children followed by the toast container, so any
  * component under the provider can raise a toast via `useToast()`.
+ *
+ * `useToast()` returns `{ triggerToast }`.
  */
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
@@ -19,7 +21,7 @@ export function ToastProvider({ children }) {
   }, []);
 
   return (
-    <ToastContext.Provider value={triggerToast}>
+    <ToastContext.Provider value={{ triggerToast }}>
       {children}
       <div className="toast-container">
         {toasts.map(t => (
@@ -33,11 +35,13 @@ export function ToastProvider({ children }) {
   );
 }
 
-/** Returns `triggerToast(message, type)`. Must be called under a <ToastProvider>. */
+/** Returns `{ triggerToast }`. Must be called under a <ToastProvider>. */
 export function useToast() {
-  const triggerToast = useContext(ToastContext);
-  if (!triggerToast) {
+  const ctx = useContext(ToastContext);
+  if (!ctx) {
     throw new Error('useToast() must be used within a <ToastProvider>');
   }
-  return triggerToast;
+  return ctx;
 }
+
+export default ToastContext;

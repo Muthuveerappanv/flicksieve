@@ -93,7 +93,7 @@ async function loadAll(fallbacks, { setShows, setReviewers, setWatchlist, setWat
 }
 
 export default function App() {
-  const triggerToast = useToast();
+  const { triggerToast } = useToast();
 
   // --- STATE ---
   const [shows, setShows] = useState(initialShows);
