@@ -15,7 +15,7 @@ A premium, interactive media dashboard designed to curate, filter, and track mov
 - **🎯 Weighted Sieve Filtering**: Filter out titles below a custom score threshold using a responsive slider, or bypass it for unrated entries.
 - **🎡 Decider Wheel**: Can't choose what to watch? Spin the interactive decider wheel to pick a random movie from your current filtered recommendations list.
 - **📅 Discover**: Keep track of release dates for upcoming movies and TV shows across platforms (Netflix, Prime, Hotstar, etc.) in a timeline layout, plus discover top-rated at-home streaming releases.
-- **🇮🇳 Sieve India**: Discovers Tamil, Telugu, Malayalam and Hindi films from handpicked, credible Indian critic websites (The Indian Express, 123Telugu, Bollywood Hungama, NDTV, News18). Ranked by professional critic star ratings across a 3- or 6-month window, searchable and filterable by verdict, language and outlet count. YouTube reviewers are an optional supplement. IMDb and Letterboxd scores are shown as context only — never used to rank or filter.
+- **🇮🇳 Sieve India**: Discovers Tamil, Telugu, Malayalam and Hindi films from handpicked, credible Indian critic websites (The Indian Express, 123Telugu, Bollywood Hungama, NDTV, News18, MovieCrow, OnManorama, and the four Times of India language desks). Ranked by professional critic star ratings across a 3- or 6-month window, searchable and filterable by verdict, language and outlet count. YouTube reviewers are an optional supplement. IMDb and Letterboxd scores are shown as context only — never used to rank or filter.
 - **🔖 Watchlist & Logs**: Manage your watchlist and log watched titles with notes.
 - **🎨 Curated Accent Themes**: Toggle between five modern, vibrant visual themes:
   - **Amethyst** (Vibrant Purple & Pink - Default)
@@ -41,7 +41,7 @@ A premium, interactive media dashboard designed to curate, filter, and track mov
 - Python (v3.9+)
 
 ### 1. Clone & Setup Project
-FlickSieve has an automated setup script. Running `npm install` will automatically download Node modules, create the Python virtual environment (`.venv/`), and install all Python scraping dependencies (e.g. `requests`, `beautifulsoup4`, `letterboxdpy`):
+FlickSieve has an automated setup script. Running `npm install` will automatically download Node modules, create the Python virtual environment (`.venv/`), and install all Python scraping dependencies listed in `requirements.txt`:
 ```bash
 # Clone the repository
 git clone https://github.com/Muthuveerappanv/flicksieve.git
@@ -52,7 +52,7 @@ npm install
 ```
 
 > [!NOTE]
-> Make sure `python3` is installed on your system so the postinstall script can automatically configure the virtual environment. If the script fails, you can set it up manually: `python3 -m venv .venv && .venv/bin/pip install requests beautifulsoup4 letterboxdpy`.
+> Make sure `python3` is installed on your system so the postinstall script can automatically configure the virtual environment. If the script fails, you can set it up manually: `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`.
 
 ### 3. Run Development Server
 Start the frontend and local API handlers:

@@ -1,0 +1,7 @@
+# FlickSieve Python scraping dependencies.
+# Consumed by scripts/setup_python.js (postinstall), .github/workflows, and the
+# manual setup path in README.md. Keep this file the single source of truth.
+requests==2.34.2
+beautifulsoup4==4.14.3
+letterboxdpy==6.5.5
+curl_cffi==0.15.0
