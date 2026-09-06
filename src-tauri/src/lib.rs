@@ -251,14 +251,16 @@ fn run_discover_at_home(
 #[tauri::command]
 fn run_discover_indian(
     app: tauri::AppHandle,
-    handles: String,
-    max_age_days: String,
-    min_reviewers: String,
+    window_days: String,
+    languages: String,
+    min_rating: String,
+    min_critics: String,
+    include_youtube: String,
 ) -> Result<String, String> {
     execute_python_script(
         app,
         "discover_indian.py",
-        vec![&handles, &max_age_days, &min_reviewers],
+        vec![&window_days, &languages, &min_rating, &min_critics, &include_youtube],
     )
 }
 

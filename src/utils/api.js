@@ -73,35 +73,39 @@ export async function fetchDiscoverAtHome(days = 90, minAudience = 70, sort = 'a
 }
 
 /**
- * Discovers Indian films from the reviewers the user trusts.
+ * Discovers Indian films from handpicked, credible critic websites.
  *
- * Ranking is driven by how many trusted critics reviewed a film -- NOT by
- * IMDb or Letterboxd scores, which are fetched for display only. A measured
- * 38% of films covered by trusted reviewers have no Letterboxd entry, so
- * those ratings must never filter results.
- *
- * Returns { count, reviewersUsed, failedReviewers, films: [...] }.
+ * Critic star ratings (bylined professionals) drive the ranking. IMDb and
+ * Letterboxd remain display-only and never rank or filter. YouTube reviewers
+ * are an optional supplement, off by default.
  */
 export async function fetchDiscoverIndian({
-  handles = [],
-  maxAgeDays = 60,
-  minReviewers = 1,
+  windowDays = 90,
+  languages = [],
+  minRating = null,
+  minCritics = 1,
+  includeYoutube = false,
 } = {}) {
-  const handleParam = Array.isArray(handles) ? handles.join(',') : String(handles || '');
+  const langParam = Array.isArray(languages) ? languages.join(',') : String(languages || '');
+  const ratingParam = minRating === null || minRating === '' ? '' : String(minRating);
 
   if (isTauri()) {
     const resultJson = await invoke('run_discover_indian', {
-      handles: handleParam,
-      maxAgeDays: String(maxAgeDays),
-      minReviewers: String(minReviewers),
+      windowDays: String(windowDays),
+      languages: langParam,
+      minRating: ratingParam,
+      minCritics: String(minCritics),
+      includeYoutube: String(includeYoutube),
     });
     return JSON.parse(resultJson);
   }
 
   const params = new URLSearchParams({
-    handles: handleParam,
-    max_age_days: String(maxAgeDays),
-    min_reviewers: String(minReviewers),
+    window_days: String(windowDays),
+    languages: langParam,
+    min_rating: ratingParam,
+    min_critics: String(minCritics),
+    include_youtube: String(includeYoutube),
   });
   const res = await fetch(`/api/discover-indian?${params.toString()}`);
   if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);

@@ -200,17 +200,19 @@ export default defineConfig({
           }
 
           if (reqUrl.pathname === '/api/discover-indian') {
-            const handles = reqUrl.query.handles || '';
-            const maxAgeDays = reqUrl.query.max_age_days || '60';
-            const minReviewers = reqUrl.query.min_reviewers || '1';
+            const windowDays = reqUrl.query.window_days || '90';
+            const languages = reqUrl.query.languages || '';
+            const minRating = reqUrl.query.min_rating || '';
+            const minCritics = reqUrl.query.min_critics || '1';
+            const includeYoutube = reqUrl.query.include_youtube || 'false';
 
             const pythonPath = path.join(__dirname, '.venv', 'bin', 'python3');
             const scriptPath = path.join(__dirname, 'scripts', 'discover_indian.py');
 
             execFile(
               pythonPath,
-              [scriptPath, handles, maxAgeDays, minReviewers],
-              { maxBuffer: 20 * 1024 * 1024 },
+              [scriptPath, windowDays, languages, minRating, minCritics, includeYoutube],
+              { maxBuffer: 20 * 1024 * 1024, timeout: 300000 },
               (err, stdout, stderr) => {
                 res.setHeader('Content-Type', 'application/json');
                 if (err) {
