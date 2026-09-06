@@ -310,3 +310,40 @@ class TestCriticScore(unittest.TestCase):
 
     def test_recency_decay(self):
         self.assertGreater(di.critic_score(4.0, 2, 0, 1), di.critic_score(4.0, 2, 0, 200))
+
+
+class TestAggregateCritics(unittest.TestCase):
+    def _review(self, outlet, film, stars, lang="Tamil", d="2026-09-01"):
+        return {"reviewer": outlet, "film": film, "filmKey": di.normalize_title(film),
+                "stars": stars, "language": lang, "url": f"https://x/{outlet}/{film}",
+                "headline": f"{film} review", "tier": "A", "date": d}
+
+    def test_averages_stars_across_outlets(self):
+        rows = di.aggregate_critics([
+            self._review("A", "Film One", 4.0),
+            self._review("B", "Film One", 3.0),
+        ])
+        self.assertEqual(rows[0]["avgStars"], 3.5)
+        self.assertEqual(rows[0]["criticCount"], 2)
+
+    def test_min_rating_filters(self):
+        rows = di.aggregate_critics(
+            [self._review("A", "Weak Film", 1.5)], min_rating=3.0)
+        self.assertEqual(rows, [])
+
+    def test_language_filter(self):
+        rows = di.aggregate_critics(
+            [self._review("A", "Telugu Film", 4.0, lang="Telugu")], languages=["Tamil"])
+        self.assertEqual(rows, [])
+
+    def test_unrated_films_are_kept_when_no_min_rating(self):
+        rows = di.aggregate_critics([self._review("A", "No Stars", None)])
+        self.assertEqual(len(rows), 1)
+        self.assertIsNone(rows[0]["avgStars"])
+
+    def test_sorted_by_score(self):
+        rows = di.aggregate_critics([
+            self._review("A", "Weak", 1.0),
+            self._review("B", "Strong", 4.5),
+        ])
+        self.assertEqual(rows[0]["film"], "Strong")

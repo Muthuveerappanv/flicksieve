@@ -588,6 +588,86 @@ def aggregate(youtube_reviews, critic_reviews, min_reviewers=1):
     return results
 
 
+def aggregate_critics(critic_reviews, youtube_reviews=None, min_critics=1,
+                      min_rating=None, languages=None):
+    """Group critic reviews by film and rank by critic verdict."""
+    youtube_reviews = youtube_reviews or []
+    films = {}
+
+    for review in critic_reviews:
+        key = review["filmKey"]
+        if not key:
+            continue
+        entry = films.setdefault(key, {
+            "film": review["film"], "filmKey": key,
+            "criticReviews": [], "youtubeReviews": [],
+            "languages": set(), "dates": [],
+        })
+        entry["criticReviews"].append(review)
+        if review.get("language"):
+            entry["languages"].add(review["language"])
+        if review.get("date"):
+            entry["dates"].append(review["date"])
+
+    for review in youtube_reviews:
+        entry = films.get(review["filmKey"])
+        if entry:
+            entry["youtubeReviews"].append(review)
+
+    today = date.today()
+    results = []
+    for entry in films.values():
+        critics = entry["criticReviews"]
+        if len(critics) < min_critics:
+            continue
+
+        stars = [c["stars"] for c in critics if c.get("stars") is not None]
+        avg = round(sum(stars) / len(stars), 2) if stars else None
+        if min_rating is not None and (avg is None or avg < min_rating):
+            continue
+
+        langs = sorted(entry["languages"])
+        if languages:
+            wanted = {l.title() for l in languages}
+            if langs and not (set(langs) & wanted):
+                continue
+
+        age_days = None
+        if entry["dates"]:
+            try:
+                newest = max(entry["dates"])
+                age_days = (today - date.fromisoformat(newest)).days
+            except ValueError:
+                age_days = None
+
+        results.append({
+            "film": entry["film"],
+            "filmKey": entry["filmKey"],
+            "language": langs[0] if langs else None,
+            "languages": langs,
+            "avgStars": avg,
+            "criticCount": len(critics),
+            "ratedCount": len(stars),
+            "criticReviews": [
+                {"outlet": c["reviewer"], "stars": c.get("stars"), "url": c["url"],
+                 "headline": c.get("headline"), "tier": c.get("tier"), "date": c.get("date")}
+                for c in critics
+            ],
+            "youtubeReviews": [
+                {"reviewer": y["reviewer"], "url": y["url"], "views": y.get("views")}
+                for y in entry["youtubeReviews"]
+            ],
+            "youtubeCount": len({y["reviewer"] for y in entry["youtubeReviews"]}),
+            "ageDays": age_days,
+            "score": critic_score(avg, len(critics),
+                                  len({y["reviewer"] for y in entry["youtubeReviews"]}),
+                                  age_days),
+        })
+
+    results.sort(key=lambda r: -r["score"])
+    return results
+
+
 IMDB_GQL_URL = "https://caching.graphql.imdb.com/"
 IMDB_HEADERS = {
     "content-type": "application/json",
