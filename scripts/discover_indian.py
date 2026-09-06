@@ -35,6 +35,68 @@ CRITIC_FEEDS = {
     "NDTV": "https://feeds.feedburner.com/ndtvmovies-latest",
 }
 
+# Handpicked for CREDIBILITY: bylined critics, editorial standards, regional depth.
+# Every template, pattern and rating strategy below was verified live 2026-09-05.
+#   tier "A" = machine-readable star rating verified
+#   tier "B" = credible coverage, rating often absent
+CRITIC_SITES = {
+    "The Indian Express": {
+        "template": "https://indianexpress.com/section/entertainment/movie-review/page/{page}/",
+        "link_pattern": r'href="(https://indianexpress\.com/article/entertainment/[^"#?]*review[^"#?]*?)"',
+        "max_pages": 12,
+        "tier": "A",
+        "default_language": None,
+        "rating": "jsonld",
+    },
+    "123Telugu": {
+        "template": "https://www.123telugu.com/mnews/category/reviews/page/{page}",
+        "link_pattern": r'href="(https://www\.123telugu\.com/reviews/[^"#?]+\.html)"',
+        "max_pages": 12,
+        "tier": "A",
+        "default_language": "Telugu",
+        "rating": "text",
+    },
+    "Bollywood Hungama": {
+        "template": "https://www.bollywoodhungama.com/movie-reviews/page/{page}/",
+        "link_pattern": r'href="(https://www\.bollywoodhungama\.com/movie/[^"#?]*critic-review[^"#?]*)"',
+        "max_pages": 8,
+        "tier": "A",
+        "default_language": "Hindi",
+        "rating": "jsonld",
+    },
+    "NDTV": {
+        # No working pagination -- page 1 only, still worth 21 rated reviews.
+        "template": "https://www.ndtv.com/entertainment/movie-reviews",
+        "link_pattern": r'href="(https://www\.ndtv\.com/entertainment/[^"#?]*review[^"#?]*)"',
+        "max_pages": 1,
+        "tier": "A",
+        "default_language": None,
+        "rating": "jsonld",
+    },
+    "News18": {
+        "template": "https://www.news18.com/movies/movie-reviews/page-{page}/",
+        "link_pattern": r'href="(https://www\.news18\.com/movies/[^"#?]*review[^"#?]*)"',
+        "max_pages": 6,
+        "tier": "B",
+        "default_language": None,
+        "rating": "jsonld",
+    },
+}
+
+# Cinema Express has NO star ratings (verified) but excellent language-tagged
+# archive coverage via daily sitemaps. Used for corroboration only.
+CINEMA_EXPRESS_SITEMAP = "https://www.cinemaexpress.com/sitemap/sitemap-daily-{date}.xml"
+
+LANGUAGE_KEYWORDS = {
+    "Tamil": r"\btamil\b|\bkollywood\b",
+    "Telugu": r"\btelugu\b|\btollywood\b",
+    "Malayalam": r"\bmalayalam\b|\bmollywood\b",
+    "Hindi": r"\bhindi\b|\bbollywood\b",
+    "Kannada": r"\bkannada\b|\bsandalwood\b",
+}
+
+WINDOW_PRESETS = {"3m": 90, "6m": 180}
+
 REVIEW_WORD = re.compile(r"\breview\b", re.I)
 
 # Weights: reviewer count dominates by design.

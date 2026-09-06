@@ -191,3 +191,23 @@ class TestEnrichmentIsOptional(unittest.TestCase):
         self.assertIsNone(film["imdbId"])
         self.assertIsNone(film["letterboxdRating"])
         self.assertEqual(film["platform"], "Other")
+
+
+class TestCriticSites(unittest.TestCase):
+    def test_all_four_languages_are_servable(self):
+        for lang in ("Tamil", "Telugu", "Malayalam", "Hindi"):
+            self.assertIn(lang, di.LANGUAGE_KEYWORDS)
+
+    def test_telugu_and_hindi_have_dedicated_outlets(self):
+        defaults = {c["default_language"] for c in di.CRITIC_SITES.values()}
+        self.assertIn("Telugu", defaults)
+        self.assertIn("Hindi", defaults)
+
+    def test_every_site_declares_required_keys(self):
+        for name, cfg in di.CRITIC_SITES.items():
+            for key in ("template", "link_pattern", "max_pages", "tier", "rating"):
+                self.assertIn(key, cfg, f"{name} missing {key}")
+
+    def test_window_presets(self):
+        self.assertEqual(di.WINDOW_PRESETS["3m"], 90)
+        self.assertEqual(di.WINDOW_PRESETS["6m"], 180)
