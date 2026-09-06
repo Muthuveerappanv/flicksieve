@@ -251,6 +251,11 @@ class TestCriticSites(unittest.TestCase):
         self.assertIn("Telugu", defaults)
         self.assertIn("Hindi", defaults)
 
+    def test_tamil_has_dedicated_outlet(self):
+        defaults = {c["default_language"] for c in di.CRITIC_SITES.values()}
+        self.assertIn("Tamil", defaults)
+        self.assertEqual(di.CRITIC_SITES["Times of India (Tamil)"]["default_language"], "Tamil")
+
     def test_every_site_declares_required_keys(self):
         for name, cfg in di.CRITIC_SITES.items():
             for key in ("template", "link_pattern", "max_pages", "tier", "rating"):

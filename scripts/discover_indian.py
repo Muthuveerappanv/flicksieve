@@ -102,6 +102,42 @@ CRITIC_SITES = {
         "default_language": "Malayalam",
         "rating": "none",
     },
+    "Times of India (Tamil)": {
+        "template": "https://timesofindia.indiatimes.com/entertainment/tamil/movie-reviews",
+        "link_pattern": r'href="(/entertainment/tamil/movie-reviews/[^"#?]+/movie-review/\d+\.cms)"',
+        "base_url": "https://timesofindia.indiatimes.com",
+        "max_pages": 1,
+        "tier": "A",
+        "default_language": "Tamil",
+        "rating": "jsonld",
+    },
+    "Times of India (Telugu)": {
+        "template": "https://timesofindia.indiatimes.com/entertainment/telugu/movie-reviews",
+        "link_pattern": r'href="(/entertainment/telugu/movie-reviews/[^"#?]+/movie-review/\d+\.cms)"',
+        "base_url": "https://timesofindia.indiatimes.com",
+        "max_pages": 1,
+        "tier": "A",
+        "default_language": "Telugu",
+        "rating": "jsonld",
+    },
+    "Times of India (Malayalam)": {
+        "template": "https://timesofindia.indiatimes.com/entertainment/malayalam/movie-reviews",
+        "link_pattern": r'href="(/entertainment/malayalam/movie-reviews/[^"#?]+/movie-review/\d+\.cms)"',
+        "base_url": "https://timesofindia.indiatimes.com",
+        "max_pages": 1,
+        "tier": "A",
+        "default_language": "Malayalam",
+        "rating": "jsonld",
+    },
+    "Times of India (Hindi)": {
+        "template": "https://timesofindia.indiatimes.com/entertainment/hindi/movie-reviews",
+        "link_pattern": r'href="(/entertainment/hindi/movie-reviews/[^"#?]+/movie-review/\d+\.cms)"',
+        "base_url": "https://timesofindia.indiatimes.com",
+        "max_pages": 1,
+        "tier": "A",
+        "default_language": "Hindi",
+        "rating": "jsonld",
+    },
 }
 
 # Cinema Express has NO star ratings (verified) but excellent language-tagged
@@ -414,7 +450,7 @@ def extract_review_rating(html):
 
 
 def detect_language(url, headline, outlet_default, html=None):
-    """URL path wins, then headline keywords, then page content, then outlet default."""
+    """URL path wins, then headline keywords, then outlet default, then page content."""
     path = urlparse(url or "").path.lower() if "://" in (url or "") else (url or "").lower()
     for language, pattern in LANGUAGE_KEYWORDS.items():
         if re.search(pattern, path):
@@ -430,6 +466,9 @@ def detect_language(url, headline, outlet_default, html=None):
         cand = m.group(1).title()
         if cand in LANGUAGE_KEYWORDS and cand != outlet_default:
             return cand
+
+    if outlet_default:
+        return outlet_default
 
     if html:
         title_m = re.search(r"<title>([^<]+)</title>", html, re.I)
@@ -450,7 +489,7 @@ def detect_language(url, headline, outlet_default, html=None):
             if cand in LANGUAGE_KEYWORDS:
                 return cand
 
-    return outlet_default
+    return None
 
 
 def _article_date(html, url):
