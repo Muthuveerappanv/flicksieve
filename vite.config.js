@@ -127,6 +127,7 @@ export default defineConfig({
             const query = reqUrl.query.query;
             const year = reqUrl.query.year || '';
             const imdbId = reqUrl.query.imdb_id || '';
+            const isTv = reqUrl.query.is_tv || 'false';
             
             if (!query) {
               res.statusCode = 400;
@@ -138,7 +139,7 @@ export default defineConfig({
             const pythonPath = path.join(__dirname, '.venv', 'bin', 'python3');
             const scriptPath = path.join(__dirname, 'scripts', 'fetch_letterboxd.py');
             
-            execFile(pythonPath, [scriptPath, query, year, imdbId], (err, stdout, stderr) => {
+            execFile(pythonPath, [scriptPath, query, year, imdbId, isTv], (err, stdout, stderr) => {
               res.setHeader('Content-Type', 'application/json');
               if (err) {
                 res.statusCode = 500;
@@ -177,6 +178,52 @@ export default defineConfig({
             return;
           }
           
+          if (reqUrl.pathname === '/api/discover-at-home') {
+            const days = reqUrl.query.days || 'None';
+            const minAudience = reqUrl.query.min_audience || 'None';
+            const sort = reqUrl.query.sort || 'None';
+            const mediaType = reqUrl.query.media_type || 'movie';
+
+            const pythonPath = path.join(__dirname, '.venv', 'bin', 'python3');
+            const scriptPath = path.join(__dirname, 'scripts', 'discover_at_home.py');
+
+            execFile(pythonPath, [scriptPath, days, minAudience, sort, mediaType], { maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+              res.setHeader('Content-Type', 'application/json');
+              if (err) {
+                res.statusCode = 500;
+                res.end(JSON.stringify({ error: err.message, stderr }));
+                return;
+              }
+              res.end(stdout);
+            });
+            return;
+          }
+
+          if (reqUrl.pathname === '/api/discover-indian') {
+            const handles = reqUrl.query.handles || '';
+            const maxAgeDays = reqUrl.query.max_age_days || '60';
+            const minReviewers = reqUrl.query.min_reviewers || '1';
+
+            const pythonPath = path.join(__dirname, '.venv', 'bin', 'python3');
+            const scriptPath = path.join(__dirname, 'scripts', 'discover_indian.py');
+
+            execFile(
+              pythonPath,
+              [scriptPath, handles, maxAgeDays, minReviewers],
+              { maxBuffer: 20 * 1024 * 1024 },
+              (err, stdout, stderr) => {
+                res.setHeader('Content-Type', 'application/json');
+                if (err) {
+                  res.statusCode = 500;
+                  res.end(JSON.stringify({ error: err.message, stderr }));
+                  return;
+                }
+                res.end(stdout);
+              }
+            );
+            return;
+          }
+
           if (reqUrl.pathname === '/api/scrape-91mobiles') {
             const pythonPath = path.join(__dirname, '.venv', 'bin', 'python3');
             const scriptPath = path.join(__dirname, 'scripts', 'scrape_91mobiles.py');
