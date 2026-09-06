@@ -77,6 +77,26 @@ class TestFilmTitleFromReview(unittest.TestCase):
         self.assertEqual(di.normalize_title("I'M GAME"), di.normalize_title("i'm game"))
         self.assertEqual(di.normalize_title("Vishwanath & Sons"), di.normalize_title("Vishwanath and Sons"))
 
+    def test_film_title_strips_possessive_person_name(self):
+        self.assertEqual(
+            di.film_title_from_review("Suriya's Vishwanath And Sons Movie Review and Rating"),
+            "Vishwanath And Sons",
+        )
+        self.assertEqual(
+            di.film_title_from_review("Dulquer Salmaan's I'm Game Movie Review and Rating"),
+            "I'm Game",
+        )
+
+
+class TestStripPossessive(unittest.TestCase):
+    def test_strips_possessive_person_name(self):
+        self.assertEqual(di.strip_possessive("Suriya's Vishwanath And Sons"), "Vishwanath And Sons")
+        self.assertEqual(di.strip_possessive("Dulquer Salmaan's I'm Game"), "I'm Game")
+
+    def test_preserves_titles_without_leading_possessive(self):
+        self.assertEqual(di.strip_possessive("I'm Game"), "I'm Game")
+        self.assertEqual(di.strip_possessive("Mirzapur"), "Mirzapur")
+
 
 class TestMetadataParsing(unittest.TestCase):
     def test_view_counts(self):
@@ -240,6 +260,15 @@ class TestCriticSites(unittest.TestCase):
         self.assertEqual(di.WINDOW_PRESETS["3m"], 90)
         self.assertEqual(di.WINDOW_PRESETS["6m"], 180)
 
+    def test_non_123telugu_neutral_outlet_present(self):
+        neutral = [
+            name for name, cfg in di.CRITIC_SITES.items()
+            if cfg.get("default_language") is None and name != "123Telugu"
+        ]
+        self.assertGreaterEqual(len(neutral), 1)
+        self.assertIn("MovieCrow", di.CRITIC_SITES)
+        self.assertIn("OnManorama", di.CRITIC_SITES)
+
 
 class TestReviewRating(unittest.TestCase):
     def test_jsonld_review_rating(self):
@@ -297,6 +326,18 @@ class TestLanguageDetection(unittest.TestCase):
 
 
 class TestScrapeCriticSite(unittest.TestCase):
+    def test_relative_link_resolves_with_base_url(self):
+        self.assertEqual(
+            di.resolve_link("/News/123/foo-review", "https://www.moviecrow.com"),
+            "https://www.moviecrow.com/News/123/foo-review",
+        )
+
+    def test_absolute_link_untouched_when_base_url_present(self):
+        self.assertEqual(
+            di.resolve_link("https://example.com/News/123/foo-review", "https://www.moviecrow.com"),
+            "https://example.com/News/123/foo-review",
+        )
+
     def test_stops_when_pagination_repeats(self):
         calls = []
         original = di._fetch

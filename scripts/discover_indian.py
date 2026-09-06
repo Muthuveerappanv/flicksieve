@@ -84,6 +84,24 @@ CRITIC_SITES = {
         "default_language": None,
         "rating": "jsonld",
     },
+    "MovieCrow": {
+        "template": "https://www.moviecrow.com/Reviews",
+        "link_pattern": r'href="(/News/\d+/[^"#?]*review[^"#?]*)"',
+        "base_url": "https://www.moviecrow.com",
+        "max_pages": 1,
+        "tier": "A",
+        "default_language": None,
+        "rating": "text",
+    },
+    "OnManorama": {
+        "template": "https://www.onmanorama.com/entertainment/movie-reviews.html",
+        "link_pattern": r'href="(/entertainment/movie-reviews/\d{4}/\d{2}/\d{2}/[^"#?]+\.html)"',
+        "base_url": "https://www.onmanorama.com",
+        "max_pages": 1,
+        "tier": "B",
+        "default_language": "Malayalam",
+        "rating": "none",
+    },
 }
 
 # Cinema Express has NO star ratings (verified) but excellent language-tagged
@@ -111,16 +129,37 @@ W_RECENCY = 0.5
 
 
 # Qualifiers that sit between the film name and the word "review".
-_QUALIFIER = r"(?:Malayalam\s+|Tamil\s+|Telugu\s+|Hindi\s+|Kannada\s+)?(?:Version\s+)?(?:The\s+|A\s+|An\s+)?(?:Movie\s+|Film\s+|Web\s+Series\s+|Series\s+)?"
+_QUALIFIER = r"(?:Malayalam\s+|Tamil\s+|Telugu\s+|Hindi\s+|Kannada\s+)?(?:Version\s+)?(?:First\s+Half\s+|Quick\s+)?(?:\b(?:The|A|An)\s+)?(?:Movie\s+|Film\s+|Web\s+Series\s+|Series\s+)?"
+
+
+def strip_possessive(title):
+    """Strip a leading possessive person-name prefix from a title.
+
+    E.g. "Suriya's Vishwanath And Sons" -> "Vishwanath And Sons".
+    Preserves mid-title apostrophes like "I'm Game".
+    """
+    if not title:
+        return title
+    m = re.match(r"^(.{3,30}?)\s*['\u2019]s\s+(.+)$", title)
+    if m:
+        return m.group(2).strip()
+    return title
 
 
 def film_title_from_review(video_title):
     """'IMMORTAL Review - GV Prakash' -> 'IMMORTAL'. None if not a review."""
     if not video_title or not REVIEW_WORD.search(video_title):
         return None
-    head = re.split(rf"\s*{_QUALIFIER}Review\b", video_title, maxsplit=1, flags=re.I)[0]
+    m_quoted = re.match(r"^['\"]([^'\"]+)['\"]\s*:\s+", video_title)
+    if m_quoted:
+        head = m_quoted.group(1)
+    else:
+        head = re.split(rf"\s*{_QUALIFIER}Review\b", video_title, maxsplit=1, flags=re.I)[0]
     head = head.strip(" -|:\u2013\u2014")
     head = re.sub(r"(?<=\S)\s+\b(?:the|a|an)\b$", "", head, flags=re.I).strip(" -|:\u2013\u2014")
+    head = strip_possessive(head)
+    if head.startswith(("'", '"')) and head.endswith(("'", '"')) and len(head) > 2:
+        head = head[1:-1].strip()
     return head or None
 
 
@@ -374,8 +413,8 @@ def extract_review_rating(html):
     return None
 
 
-def detect_language(url, headline, outlet_default):
-    """URL path wins, then headline keywords, then the outlet's default."""
+def detect_language(url, headline, outlet_default, html=None):
+    """URL path wins, then headline keywords, then page content, then outlet default."""
     path = urlparse(url or "").path.lower() if "://" in (url or "") else (url or "").lower()
     for language, pattern in LANGUAGE_KEYWORDS.items():
         if re.search(pattern, path):
@@ -389,8 +428,27 @@ def detect_language(url, headline, outlet_default):
     m = re.search(r"\(([A-Za-z]+)\)", headline or "")
     if m:
         cand = m.group(1).title()
-        if cand != outlet_default:
+        if cand in LANGUAGE_KEYWORDS and cand != outlet_default:
             return cand
+
+    if html:
+        title_m = re.search(r"<title>([^<]+)</title>", html, re.I)
+        if title_m:
+            title_text = title_m.group(1).lower()
+            for language, pattern in LANGUAGE_KEYWORDS.items():
+                if re.search(pattern, title_text):
+                    return language
+        sel_m = re.search(r"""value=['"](tamil|telugu|malayalam|hindi|kannada)['"][^>]*selected""", html, re.I)
+        if sel_m:
+            return sel_m.group(1).title()
+        mov_m = re.search(r"""/movie/\d+/[^"'#?]+-(tamil|malayalam|telugu|hindi|kannada)-movie""", html, re.I)
+        if mov_m:
+            return mov_m.group(1).title()
+        cat_m = re.search(r"""(?:category/reviews/|"name"\s*:\s*")([A-Za-z]+)\s+Movie\s+Reviews?""", html, re.I)
+        if cat_m:
+            cand = cat_m.group(1).title()
+            if cand in LANGUAGE_KEYWORDS:
+                return cand
 
     return outlet_default
 
@@ -404,6 +462,14 @@ def _article_date(html, url):
         match = re.search(pattern, html or "")
         if match:
             return match.group(1)
+    match = re.search(r"PUBLISHED DATE\s*:\s*(\d{1,2})/(\w{3})/(\d{4})", html or "", re.I)
+    if match:
+        months = {m: i for i, m in enumerate(
+            ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], start=1)}
+        month = months.get(match.group(2).title())
+        if month:
+            return f"{match.group(3)}-{month:02d}-{int(match.group(1)):02d}"
     match = re.search(r"/(\d{4})/(\w{3})/(\d{2})/", url or "")
     if match:
         months = {m: i for i, m in enumerate(
@@ -431,6 +497,13 @@ def clean_headline(headline):
     return text
 
 
+def resolve_link(link, base_url=""):
+    """Join relative link starting with '/' to base_url; leave absolute links untouched."""
+    if link and link.startswith("/"):
+        return f"{base_url}{link}"
+    return link
+
+
 def _fetch_article(args):
     outlet, config, url = args
     html = _fetch(url, timeout=20, retries=1)
@@ -448,6 +521,8 @@ def _fetch_article(args):
     if not film:
         return None
 
+    stars = None if config.get("rating") == "none" else extract_review_rating(html)
+
     return {
         "reviewer": outlet,
         "tier": config["tier"],
@@ -456,8 +531,8 @@ def _fetch_article(args):
         "filmKey": normalize_title(film),
         "url": url,
         "headline": headline,
-        "stars": extract_review_rating(html),
-        "language": detect_language(url, headline, config.get("default_language")),
+        "stars": stars,
+        "language": detect_language(url, headline, config.get("default_language"), html=html),
         "date": _article_date(html, url),
     }
 
@@ -465,13 +540,15 @@ def _fetch_article(args):
 def scrape_critic_site(outlet, config, window_days=90, workers=6):
     """Collect reviews from one outlet's paginated section. Never raises."""
     urls = []
+    base_url = config.get("base_url", "")
     for page in range(1, config["max_pages"] + 1):
         target = config["template"].format(page=page)
         html = _fetch(target, timeout=25, retries=2)
         if not html:
             break
         found = re.findall(config["link_pattern"], html)
-        new = [u for u in dict.fromkeys(found) if u not in urls]
+        resolved = [resolve_link(u, base_url) for u in found]
+        new = [u for u in dict.fromkeys(resolved) if u not in urls]
         if not new:
             break          # pagination exhausted or repeating
         urls.extend(new)
