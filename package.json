@@ -9,6 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "sync-ratings": "node scripts/sync_ratings.js",
+    "discover": "node scripts/discover_at_home.js",
+    "discover-indian": "node -e \"const{execFileSync}=require('child_process');process.stdout.write(execFileSync('.venv/bin/python3',['scripts/discover_indian.py',...process.argv.slice(1)],{maxBuffer:20*1024*1024}))\" --",
     "postinstall": "node scripts/setup_python.js",
     "tauri": "tauri",
     "bump-version": "node scripts/bump_version.cjs"

@@ -14,7 +14,8 @@ A premium, interactive media dashboard designed to curate, filter, and track mov
   - **Letterboxd** average ratings
 - **🎯 Weighted Sieve Filtering**: Filter out titles below a custom score threshold using a responsive slider, or bypass it for unrated entries.
 - **🎡 Decider Wheel**: Can't choose what to watch? Spin the interactive decider wheel to pick a random movie from your current filtered recommendations list.
-- **📅 OTT Tracker**: Keep track of release dates for upcoming movies and TV shows across platforms (Netflix, Prime, Hotstar, etc.) in a timeline layout.
+- **📅 Discover**: Keep track of release dates for upcoming movies and TV shows across platforms (Netflix, Prime, Hotstar, etc.) in a timeline layout, plus discover top-rated at-home streaming releases.
+- **🇮🇳 Sieve India**: Tracks the film critics you trust — YouTube reviewers and Indian press — and surfaces what they've actually reviewed. Ranked by how many of your reviewers covered each film, because crowd ratings for Indian cinema are widely gamed. IMDb and Letterboxd scores are shown as context only, never used to rank or filter (a measured 38% of films your reviewers cover have no Letterboxd entry at all).
 - **🔖 Watchlist & Logs**: Manage your watchlist and log watched titles with notes.
 - **🎨 Curated Accent Themes**: Toggle between five modern, vibrant visual themes:
   - **Amethyst** (Vibrant Purple & Pink - Default)
@@ -73,6 +74,7 @@ npm run build
 ```
 ├── dist/                     # Optimized build output
 ├── scripts/                  # Python scraping scripts
+│   ├── discover_indian.py    # Reviewer-consensus discovery (YouTube + Indian press)
 │   ├── fetch_letterboxd.py   # Letterboxd scraper
 │   ├── fetch_rottentomatoes.py # Rotten Tomatoes scraper
 │   ├── sync_ratings.js       # CLI ratings sync script
