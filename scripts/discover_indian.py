@@ -762,34 +762,41 @@ def load_handles():
         return ["@TamilTalkies", "@Filmicraft", "@unnivlogs"]
 
 
-def discover(handles=None, max_age_days=60, min_reviewers=1, enrich=True):
-    handles = handles or load_handles()
-    youtube_reviews, failed = [], []
+def discover(window_days=90, languages=None, min_critics=1, min_rating=None,
+             include_youtube=False, handles=None, outlets=None, enrich=True):
+    """Critic websites are primary; YouTube is opt-in."""
+    critic_reviews, failed_outlets = scrape_all_critic_sites(
+        window_days=window_days, languages=languages, outlets=outlets)
 
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        for handle, reviews in zip(handles, pool.map(
-                lambda h: scrape_channel(h, max_age_days), handles)):
-            if reviews:
-                youtube_reviews.extend(reviews)
-            else:
-                failed.append(handle)
+    youtube_reviews, failed_handles = [], []
+    if include_youtube:
+        handles = handles or load_handles()
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            for handle, found in zip(handles, pool.map(
+                    lambda h: scrape_channel(h, window_days), handles)):
+                if found:
+                    youtube_reviews.extend(found)
+                else:
+                    failed_handles.append(handle)
 
-    try:
-        critic_reviews = scrape_critics()
-    except Exception:
-        critic_reviews = []
+    films = aggregate_critics(
+        critic_reviews, youtube_reviews,
+        min_critics=min_critics, min_rating=min_rating, languages=languages)
 
-    films = aggregate(youtube_reviews, critic_reviews, min_reviewers=min_reviewers)
     if enrich:
         films = enrich_all(films)
 
     return {
         "count": len(films),
-        "reviewersUsed": handles,
-        "failedReviewers": failed,
-        "youtubeReviewCount": len(youtube_reviews),
+        "windowDays": window_days,
+        "languages": languages or ["Tamil", "Telugu", "Malayalam", "Hindi"],
+        "minRating": min_rating,
         "criticReviewCount": len(critic_reviews),
-        "maxAgeDays": max_age_days,
+        "youtubeReviewCount": len(youtube_reviews),
+        "includedYoutube": include_youtube,
+        "outletsUsed": outlets or list(CRITIC_SITES),
+        "failedOutlets": failed_outlets,
+        "failedReviewers": failed_handles,
         "films": films,
     }
 
@@ -802,11 +809,16 @@ def _arg(index, default):
 
 if __name__ == "__main__":
     try:
-        raw = _arg(1, "")
+        window = _arg(1, "90")
+        window_days = WINDOW_PRESETS.get(window, None) or int(window)
+        raw_langs = _arg(2, "")
+        raw_rating = _arg(3, "")
         payload = discover(
-            handles=[h.strip() for h in raw.split(",") if h.strip()] or None,
-            max_age_days=int(_arg(2, "60")),
-            min_reviewers=int(_arg(3, "1")),
+            window_days=window_days,
+            languages=[l.strip() for l in raw_langs.split(",") if l.strip()] or None,
+            min_critics=int(_arg(4, "1")),
+            min_rating=float(raw_rating) if raw_rating else None,
+            include_youtube=_arg(5, "false").lower() == "true",
         )
         print(json.dumps(payload))
     except Exception as exc:  # noqa: BLE001 - always emit JSON
