@@ -514,6 +514,31 @@ def reviewer_score(reviewer_count, total_views, critic_stars, age_days):
     return round(score, 3)
 
 
+# Critic stars dominate; critic count corroborates; YouTube is a bonus.
+W_STARS = 1.6          # per star, 0-5 -> 0-8
+W_CRITIC_COUNT = 0.9
+W_YOUTUBE_BONUS = 0.4
+W_UNRATED_COVERAGE = 0.5
+W_AGE = 0.4
+
+
+def critic_score(avg_stars, critic_count, youtube_count, age_days):
+    """Rank by professional critic verdict, corroborated by coverage.
+
+    avg_stars may be None (outlets like Cinema Express publish no rating);
+    such films still score on coverage rather than being discarded.
+    """
+    score = W_CRITIC_COUNT * (critic_count or 0)
+    if avg_stars is not None:
+        score += W_STARS * float(avg_stars)
+    else:
+        score += W_UNRATED_COVERAGE * (critic_count or 0)
+    score += W_YOUTUBE_BONUS * (youtube_count or 0)
+    if age_days:
+        score -= W_AGE * (age_days / 30.0)
+    return round(score, 3)
+
+
 def aggregate(youtube_reviews, critic_reviews, min_reviewers=1):
     """Group reviews by film and rank by reviewer consensus."""
     films = {}

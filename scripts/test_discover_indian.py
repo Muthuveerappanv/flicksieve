@@ -282,3 +282,31 @@ class TestScrapeCriticSite(unittest.TestCase):
 
     def test_article_date_prefers_metadata(self):
         self.assertEqual(di._article_date('"datePublished":"2026-01-15T10:00"', "https://x/2020/Jan/01/y"), "2026-01-15")
+
+
+class TestCriticScore(unittest.TestCase):
+    def test_higher_stars_rank_higher(self):
+        good = di.critic_score(4.5, 2, 0, 10)
+        bad = di.critic_score(1.5, 2, 0, 10)
+        self.assertGreater(good, bad)
+
+    def test_more_critics_breaks_ties(self):
+        many = di.critic_score(3.5, 4, 0, 10)
+        few = di.critic_score(3.5, 1, 0, 10)
+        self.assertGreater(many, few)
+
+    def test_youtube_is_a_bonus_not_a_requirement(self):
+        with_yt = di.critic_score(3.5, 2, 3, 10)
+        without = di.critic_score(3.5, 2, 0, 10)
+        self.assertGreater(with_yt, without)
+        self.assertIsInstance(without, float)
+
+    def test_unrated_film_still_scores_on_coverage(self):
+        # Cinema Express has no stars -- such films must not score None.
+        self.assertIsInstance(di.critic_score(None, 3, 0, 10), float)
+
+    def test_rated_beats_unrated_at_equal_coverage(self):
+        self.assertGreater(di.critic_score(4.0, 2, 0, 5), di.critic_score(None, 2, 0, 5))
+
+    def test_recency_decay(self):
+        self.assertGreater(di.critic_score(4.0, 2, 0, 1), di.critic_score(4.0, 2, 0, 200))
