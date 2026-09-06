@@ -177,3 +177,17 @@ class TestAggregate(unittest.TestCase):
         reviews = [{"reviewer": "@a", "film": "Solo", "filmKey": "solo",
                     "views": 10, "ageDays": 1, "url": "u"}]
         self.assertEqual(len(di.aggregate(reviews, [], min_reviewers=2)), 0)
+
+
+class TestEnrichmentIsOptional(unittest.TestCase):
+    def test_film_survives_total_enrichment_failure(self):
+        original_post = di._imdb_post
+        di._imdb_post = lambda payload: None
+        try:
+            film = di.enrich_film({"film": "Ghost Title", "filmKey": "ghosttitle"})
+        finally:
+            di._imdb_post = original_post
+        self.assertEqual(film["film"], "Ghost Title")   # still returned
+        self.assertIsNone(film["imdbId"])
+        self.assertIsNone(film["letterboxdRating"])
+        self.assertEqual(film["platform"], "Other")

@@ -336,3 +336,85 @@ def aggregate(youtube_reviews, critic_reviews, min_reviewers=1):
 
     results.sort(key=lambda r: -r["score"])
     return results
+
+
+IMDB_GQL_URL = "https://caching.graphql.imdb.com/"
+IMDB_HEADERS = {
+    "content-type": "application/json",
+    "x-imdb-client-name": "imdb-web-next-localized",
+}
+
+IMDB_SEARCH = """
+query Find($q:String!){
+  mainSearch(first:3, options:{searchTerm:$q, type:TITLE}){
+    edges{ node{ entity{ ... on Title {
+      id titleText{text} releaseYear{year}
+      titleType{id}
+      primaryImage{url}
+      plot{plotText{plainText}}
+      ratingsSummary{aggregateRating voteCount}
+      titleGenres{genres{genre{text}}}
+      spokenLanguages{spokenLanguages{id text}}
+    } } } }
+  }
+}
+"""
+
+
+def _imdb_post(payload):
+    try:
+        r = creq.post(IMDB_GQL_URL, json=payload, headers=IMDB_HEADERS,
+                      impersonate=IMPERSONATE, timeout=25)
+        data = r.json()
+        return None if "errors" in data else data.get("data")
+    except Exception:
+        return None
+
+
+def enrich_film(film):
+    """Attach IMDb/Letterboxd/JustWatch metadata. Always returns the film."""
+    film.setdefault("imdbId", None)
+    film.setdefault("year", None)
+    film.setdefault("posterUrl", None)
+    film.setdefault("genres", [])
+    film.setdefault("language", None)
+    film.setdefault("overview", "")
+    film.setdefault("imdbRating", None)
+    film.setdefault("letterboxdRating", None)
+    film.setdefault("platform", "Other")
+    film.setdefault("providers", [])
+
+    data = _imdb_post({"query": IMDB_SEARCH, "variables": {"q": film["film"]}})
+    if data:
+        for edge in (data.get("mainSearch") or {}).get("edges", []):
+            entity = (edge.get("node") or {}).get("entity") or {}
+            if not entity.get("id"):
+                continue
+            if normalize_title((entity.get("titleText") or {}).get("text")) != film["filmKey"]:
+                continue
+            film["imdbId"] = entity["id"]
+            film["year"] = (entity.get("releaseYear") or {}).get("year")
+            film["posterUrl"] = (entity.get("primaryImage") or {}).get("url")
+            film["overview"] = ((entity.get("plot") or {}).get("plotText") or {}).get("plainText") or ""
+            film["imdbRating"] = (entity.get("ratingsSummary") or {}).get("aggregateRating")
+            film["genres"] = [g["genre"]["text"] for g in (entity.get("titleGenres") or {}).get("genres", [])]
+            langs = (entity.get("spokenLanguages") or {}).get("spokenLanguages") or []
+            film["language"] = langs[0]["text"] if langs else None
+            break
+
+    try:
+        from letterboxdpy.movie import Movie
+        from letterboxdpy.search import Search, SearchFilter
+        for result in Search(film["film"], SearchFilter.FILMS).results.get("results", [])[:3]:
+            if normalize_title(result.get("title")) == film["filmKey"]:
+                film["letterboxdRating"] = getattr(Movie(result["slug"]), "rating", None)
+                break
+    except Exception:
+        pass
+
+    return film
+
+
+def enrich_all(films, workers=5):
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return list(pool.map(enrich_film, films))
