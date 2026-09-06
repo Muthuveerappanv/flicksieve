@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { Compass, RotateCw, Calendar, Bookmark, Settings as SettingsIcon, Star, Filter, Heart, Search as SearchIcon, X, EyeOff } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Compass, RotateCw, Bookmark, Settings as SettingsIcon, Sparkles, X, EyeOff } from 'lucide-react';
 import { initialShows, initialReviewers } from './data/shows';
-import { fetchLetterboxd, fetchRottenTomatoes, searchImdb, fetchImdbDetails, getDataFolder, setDataFolder, loadDataFile, saveDataFile } from './utils/api';
-import ShowCard from './components/ShowCard';
+import { fetchLetterboxd, fetchRottenTomatoes, fetchImdbDetails, getDataFolder, setDataFolder, loadDataFile, saveDataFile } from './utils/api';
+import { calculateSieveScore, isUnrated } from './utils/score';
 import DeciderWheel from './components/DeciderWheel';
 import OttTracker from './components/OttTracker';
 import Watchlist from './components/Watchlist';
 import Settings from './components/Settings';
 import AddTitleModal from './components/AddTitleModal';
-import SieveIndia from './components/SieveIndia';
+import FilterBar from './components/FilterBar';
+import ShowGrid from './components/ShowGrid';
+import { useToast } from './context/ToastContext';
 
 const migrateReviewers = (reviewersList) => {
   if (!Array.isArray(reviewersList)) return reviewersList;
@@ -23,7 +25,76 @@ const migrateReviewers = (reviewersList) => {
   });
 };
 
+/**
+ * Runs `effect` ~`delay`ms after `deps` last changed, collapsing bursts of
+ * state changes into a single trailing call. Used for the write-through
+ * persistence effects so keystroke-rate state updates don't hammer the disk.
+ */
+function useDebouncedEffect(effect, deps, delay = 500) {
+  const effectRef = useRef(effect);
+  effectRef.current = effect;
+  useEffect(() => {
+    const handle = setTimeout(() => effectRef.current(), delay);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...deps, delay]);
+}
+
+/**
+ * Loads shows / reviewers / watchlist / history / theme from the data folder,
+ * seeding each file from `fallbacks` when it does not yet exist. Shared by the
+ * initial mount load and the data-folder migration handler.
+ */
+async function loadAll(fallbacks, { setShows, setReviewers, setWatchlist, setWatchedHistory, setTheme }) {
+  const showsContent = await loadDataFile('shows.json');
+  if (showsContent) {
+    const parsed = JSON.parse(showsContent);
+    if (Array.isArray(parsed)) setShows(parsed);
+  } else {
+    await saveDataFile('shows.json', JSON.stringify(fallbacks.shows, null, 2));
+  }
+
+  const reviewersContent = await loadDataFile('reviewers.json');
+  if (reviewersContent) {
+    const parsed = JSON.parse(reviewersContent);
+    if (Array.isArray(parsed)) setReviewers(migrateReviewers(parsed));
+  } else {
+    await saveDataFile('reviewers.json', JSON.stringify(fallbacks.reviewers, null, 2));
+  }
+
+  const watchlistContent = await loadDataFile('watchlist.json');
+  if (watchlistContent) {
+    const parsed = JSON.parse(watchlistContent);
+    if (Array.isArray(parsed)) setWatchlist(parsed);
+  } else {
+    await saveDataFile('watchlist.json', JSON.stringify(fallbacks.watchlist, null, 2));
+  }
+
+  const historyContent = await loadDataFile('history.json');
+  if (historyContent) {
+    const parsed = JSON.parse(historyContent);
+    if (Array.isArray(parsed)) setWatchedHistory(parsed);
+  } else {
+    await saveDataFile('history.json', JSON.stringify(fallbacks.watchedHistory, null, 2));
+  }
+
+  const themeContent = await loadDataFile('theme.json');
+  if (themeContent) {
+    let t = themeContent;
+    try {
+      t = JSON.parse(themeContent);
+    } catch (e) {
+      // theme.json may hold a bare string written by an older build
+    }
+    if (t) setTheme(t);
+  } else {
+    await saveDataFile('theme.json', JSON.stringify(fallbacks.theme, null, 2));
+  }
+}
+
 export default function App() {
+  const triggerToast = useToast();
+
   // --- STATE ---
   const [shows, setShows] = useState(initialShows);
   const [reviewers, setReviewers] = useState(migrateReviewers(initialReviewers));
@@ -35,64 +106,25 @@ export default function App() {
 
   // Load data on mount
   useEffect(() => {
-    async function loadAllData() {
+    async function bootstrap() {
       try {
         setIsLoadingData(true);
         const folder = await getDataFolder();
         setDataFolderState(folder);
-        
-        const showsContent = await loadDataFile('shows.json');
-        if (showsContent) {
-          const parsed = JSON.parse(showsContent);
-          if (Array.isArray(parsed)) setShows(parsed);
-        } else {
-          await saveDataFile('shows.json', JSON.stringify(initialShows, null, 2));
-        }
-
-        const reviewersContent = await loadDataFile('reviewers.json');
-        if (reviewersContent) {
-          const parsed = JSON.parse(reviewersContent);
-          if (Array.isArray(parsed)) setReviewers(migrateReviewers(parsed));
-        } else {
-          await saveDataFile('reviewers.json', JSON.stringify(initialReviewers, null, 2));
-        }
-
-        const watchlistContent = await loadDataFile('watchlist.json');
-        if (watchlistContent) {
-          const parsed = JSON.parse(watchlistContent);
-          if (Array.isArray(parsed)) setWatchlist(parsed);
-        } else {
-          await saveDataFile('watchlist.json', JSON.stringify([], null, 2));
-        }
-
-        const historyContent = await loadDataFile('history.json');
-        if (historyContent) {
-          const parsed = JSON.parse(historyContent);
-          if (Array.isArray(parsed)) setWatchedHistory(parsed);
-        } else {
-          await saveDataFile('history.json', JSON.stringify([], null, 2));
-        }
-
-        const themeContent = await loadDataFile('theme.json');
-        if (themeContent) {
-          let t = themeContent;
-          try {
-            t = JSON.parse(themeContent);
-          } catch(e) {}
-          if (t) setTheme(t);
-        } else {
-          await saveDataFile('theme.json', JSON.stringify('amethyst', null, 2));
-        }
+        await loadAll(
+          { shows: initialShows, reviewers: initialReviewers, watchlist: [], watchedHistory: [], theme: 'amethyst' },
+          { setShows, setReviewers, setWatchlist, setWatchedHistory, setTheme }
+        );
       } catch (err) {
         console.error("Error loading FlickSieve data:", err);
       } finally {
         setIsLoadingData(false);
       }
     }
-    loadAllData();
+    bootstrap();
   }, []);
 
-  // Apply theme to document element
+  // Apply theme to document element (immediate, not debounced)
   useEffect(() => {
     try {
       document.documentElement.setAttribute('data-theme', theme);
@@ -101,32 +133,32 @@ export default function App() {
     }
   }, [theme]);
 
-  // Sync state changes to system files once loaded
-  useEffect(() => {
+  // Sync state changes to system files once loaded (debounced ~500ms)
+  useDebouncedEffect(() => {
     if (isLoadingData) return;
     saveDataFile('shows.json', JSON.stringify(shows, null, 2))
       .catch(e => console.error("Error saving shows:", e));
   }, [shows, isLoadingData]);
 
-  useEffect(() => {
+  useDebouncedEffect(() => {
     if (isLoadingData) return;
     saveDataFile('reviewers.json', JSON.stringify(reviewers, null, 2))
       .catch(e => console.error("Error saving reviewers:", e));
   }, [reviewers, isLoadingData]);
 
-  useEffect(() => {
+  useDebouncedEffect(() => {
     if (isLoadingData) return;
     saveDataFile('watchlist.json', JSON.stringify(watchlist, null, 2))
       .catch(e => console.error("Error saving watchlist:", e));
   }, [watchlist, isLoadingData]);
 
-  useEffect(() => {
+  useDebouncedEffect(() => {
     if (isLoadingData) return;
     saveDataFile('history.json', JSON.stringify(watchedHistory, null, 2))
       .catch(e => console.error("Error saving history:", e));
   }, [watchedHistory, isLoadingData]);
 
-  useEffect(() => {
+  useDebouncedEffect(() => {
     if (isLoadingData) return;
     saveDataFile('theme.json', JSON.stringify(theme, null, 2))
       .catch(e => console.error("Error saving theme:", e));
@@ -137,58 +169,20 @@ export default function App() {
       await setDataFolder(newFolder);
       setDataFolderState(newFolder);
       triggerToast(`Data folder updated to: ${newFolder}`);
-      
-      const showsContent = await loadDataFile('shows.json');
-      if (showsContent) {
-        const parsed = JSON.parse(showsContent);
-        if (Array.isArray(parsed)) setShows(parsed);
-      } else {
-        await saveDataFile('shows.json', JSON.stringify(shows, null, 2));
-      }
-
-      const reviewersContent = await loadDataFile('reviewers.json');
-      if (reviewersContent) {
-        const parsed = JSON.parse(reviewersContent);
-        if (Array.isArray(parsed)) setReviewers(migrateReviewers(parsed));
-      } else {
-        await saveDataFile('reviewers.json', JSON.stringify(reviewers, null, 2));
-      }
-
-      const watchlistContent = await loadDataFile('watchlist.json');
-      if (watchlistContent) {
-        const parsed = JSON.parse(watchlistContent);
-        if (Array.isArray(parsed)) setWatchlist(parsed);
-      } else {
-        await saveDataFile('watchlist.json', JSON.stringify(watchlist, null, 2));
-      }
-
-      const historyContent = await loadDataFile('history.json');
-      if (historyContent) {
-        const parsed = JSON.parse(historyContent);
-        if (Array.isArray(parsed)) setWatchedHistory(parsed);
-      } else {
-        await saveDataFile('history.json', JSON.stringify(watchedHistory, null, 2));
-      }
-
-      const themeContent = await loadDataFile('theme.json');
-      if (themeContent) {
-        let t = themeContent;
-        try {
-          t = JSON.parse(themeContent);
-        } catch(e) {}
-        if (t) setTheme(t);
-      } else {
-        await saveDataFile('theme.json', JSON.stringify(theme, null, 2));
-      }
+      await loadAll(
+        { shows, reviewers, watchlist, watchedHistory, theme },
+        { setShows, setReviewers, setWatchlist, setWatchedHistory, setTheme }
+      );
     } catch (err) {
       console.error("Error changing/migrating data folder:", err);
       alert(`Failed to update data folder: ${err.message}`);
     }
   };
-  // Navigation tab
-  const [activeTab, setActiveTab] = useState('recommendations'); // recommendations | sieved_out | wheel | tracker | sieve_india | watchlist | settings
 
-  // Media Mode State: 'movie' | 'tv' (persisted in localStorage and synchronizes entire application)
+  // Navigation tab
+  const [activeTab, setActiveTab] = useState('recommendations'); // recommendations | sieved_out | wheel | tracker | watchlist | settings
+
+  // Media Mode State: 'movie' | 'tv' (persisted in localStorage, synchronizes entire application)
   const [activeMediaType, setActiveMediaType] = useState(() => {
     try {
       return localStorage.getItem('flicksieve_active_media_type') || 'movie';
@@ -200,7 +194,9 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem('flicksieve_active_media_type', activeMediaType);
-    } catch (e) {}
+    } catch (e) {
+      // localStorage unavailable — media type simply won't persist
+    }
   }, [activeMediaType]);
 
   // Filter states
@@ -210,102 +206,83 @@ export default function App() {
   const [minSieveScore, setMinSieveScore] = useState(3.0); // Filter out shows <= 3.0 out of 5
   const [includeUnrated, setIncludeUnrated] = useState(true); // Allow shows with no ratings to bypass sieve
 
-  // Toast notification state
-  const [toasts, setToasts] = useState([]);
-
-  // Add Title Modal State
+  // Add / Delete Title Modal State
   const [showAddTitleModal, setShowAddTitleModal] = useState(false);
-
-  // Delete Title Modal State
   const [showToDelete, setShowToDelete] = useState(null);
 
-  // --- TOAST HELPER ---
-  const triggerToast = (message, type = 'success') => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 3000);
-  };
+  // Live mirror of `shows` for callbacks that must read it without depending on it
+  const showsRef = useRef(shows);
+  useEffect(() => { showsRef.current = shows; }, [shows]);
 
   // --- HANDLERS ---
-  const handleToggleWatchlist = (show) => {
-    const exists = watchlist.some(item => item.id === show.id);
-    if (exists) {
-      setWatchlist(prev => prev.filter(item => item.id !== show.id));
-      triggerToast(`Removed "${show.title}" from watchlist.`);
-    } else {
-      setWatchlist(prev => [...prev, show]);
+  const handleToggleWatchlist = useCallback((show) => {
+    setWatchlist(prev => {
+      const exists = prev.some(item => item.id === show.id);
+      if (exists) {
+        triggerToast(`Removed "${show.title}" from watchlist.`);
+        return prev.filter(item => item.id !== show.id);
+      }
       triggerToast(`Added "${show.title}" to watchlist!`);
-    }
-  };
+      return [...prev, show];
+    });
+  }, [triggerToast]);
 
-  const handleRemoveFromWatchlist = (showId) => {
+  const handleRemoveFromWatchlist = useCallback((showId) => {
     setWatchlist(prev => prev.filter(item => item.id !== showId));
-  };
+  }, []);
 
-  const handleUpdateWatchlistShow = (updatedShow) => {
+  const handleUpdateWatchlistShow = useCallback((updatedShow) => {
     setWatchlist(prev => prev.map(item => item.id === updatedShow.id ? updatedShow : item));
-  };
+  }, []);
 
-  const handleAddToHistory = (logEntry) => {
+  const handleAddToHistory = useCallback((logEntry) => {
     setWatchedHistory(prev => [logEntry, ...prev]);
     triggerToast(`Logged "${logEntry.title}" into watched history!`);
-  };
+  }, [triggerToast]);
 
-  const handleRemoveFromHistory = (logId) => {
+  const handleRemoveFromHistory = useCallback((logId) => {
     setWatchedHistory(prev => prev.filter(item => item.logId !== logId));
     triggerToast(`Deleted log entry.`);
-  };
+  }, [triggerToast]);
 
   // Settings modification handlers
-  const handleAddReviewer = (newReviewer) => {
+  const handleAddReviewer = useCallback((newReviewer) => {
     setReviewers(prev => [...prev, newReviewer]);
     triggerToast(`Added reviewer "${newReviewer.name}"`);
-  };
+  }, [triggerToast]);
 
-  const handleDeleteReviewer = (reviewerId) => {
-    const rev = reviewers.find(r => r.id === reviewerId);
-    setReviewers(prev => prev.filter(r => r.id !== reviewerId));
-    triggerToast(`Deleted reviewer "${rev?.name}"`);
-  };
+  const handleDeleteReviewer = useCallback((reviewerId) => {
+    setReviewers(prev => {
+      const rev = prev.find(r => r.id === reviewerId);
+      triggerToast(`Deleted reviewer "${rev?.name}"`);
+      return prev.filter(r => r.id !== reviewerId);
+    });
+  }, [triggerToast]);
 
-  const handleUpdateReviewer = (updatedReviewer) => {
+  const handleUpdateReviewer = useCallback((updatedReviewer) => {
     setReviewers(prev => prev.map(r => r.id === updatedReviewer.id ? updatedReviewer : r));
-  };
+  }, []);
 
-
-  const handleAddShow = (newShow) => {
-    // Sieve check
-    const calculateScore = (show) => {
-      let total = 0, count = 0;
-      if (show.ratings.imdb) { total += show.ratings.imdb / 2; count++; }
-      if (show.ratings.rottenTomatoesAudience) { total += show.ratings.rottenTomatoesAudience / 20; count++; }
-      if (show.ratings.letterboxd) { total += show.ratings.letterboxd; count++; }
-      else if (show.type === 'tv' && show.ratings.rottenTomatoes) { total += show.ratings.rottenTomatoes / 20; count++; }
-      return count > 0 ? (total / count) : 0;
-    };
-
-    const score = calculateScore(newShow);
+  const handleAddShow = useCallback((newShow) => {
+    const score = calculateSieveScore(newShow);
     setShows(prev => [newShow, ...prev]);
 
-    // If user added a show matching or not matching activeMediaType, switch mode so it's immediately visible
+    // Switch media mode so the new title is immediately visible
     if (newShow.type && newShow.type !== activeMediaType) {
       setActiveMediaType(newShow.type);
     }
-    
+
     if (score <= minSieveScore) {
       triggerToast(`Added "${newShow.title}". Note: Rating is ${score.toFixed(1)}/5, it will be sieved (filtered) from your active recommendations!`, 'error');
     } else {
       triggerToast(`Successfully added "${newShow.title}" to recommendations!`);
     }
-  };
+  }, [activeMediaType, minSieveScore, triggerToast]);
 
-  const handleDeleteShow = (showId) => {
-    const show = shows.find(s => s.id === showId);
-    if (!show) return;
-    setShowToDelete(show);
-  };
+  const handleDeleteShow = useCallback((showId) => {
+    const show = showsRef.current.find(s => s.id === showId);
+    if (show) setShowToDelete(show);
+  }, []);
 
   const handleConfirmDelete = () => {
     if (!showToDelete) return;
@@ -315,8 +292,8 @@ export default function App() {
     setShowToDelete(null);
   };
 
-  const handleRefreshShowRatings = async (showId, triggerNotification = true) => {
-    const show = shows.find(s => s.id === showId);
+  const handleRefreshShowRatings = useCallback(async (showId, triggerNotification = true) => {
+    const show = showsRef.current.find(s => s.id === showId);
     if (!show) return false;
 
     try {
@@ -332,14 +309,12 @@ export default function App() {
       let currentTotalSeasons = show.totalSeasons || null;
       const isTv = show.type === 'tv';
 
-      // Run all 3 rating lookups concurrently in parallel
       const [imdbResult, lbResult, rtResult] = await Promise.allSettled([
         fetchImdbDetails(currentImdbId, show.title, currentYear),
         fetchLetterboxd(show.title, currentYear, currentImdbId, isTv),
         fetchRottenTomatoes(show.title, currentYear, isTv)
       ]);
 
-      // 1. Process IMDb details
       if (imdbResult.status === 'fulfilled' && imdbResult.value) {
         const imdbData = imdbResult.value;
         if (imdbData.imdbId) currentImdbId = imdbData.imdbId;
@@ -363,7 +338,6 @@ export default function App() {
         }
       }
 
-      // 2. Process Letterboxd details
       if (lbResult.status === 'fulfilled' && lbResult.value && !lbResult.value.error) {
         const lbData = lbResult.value;
         if (lbData.rating) {
@@ -386,7 +360,6 @@ export default function App() {
         }
       }
 
-      // 3. Process Rotten Tomatoes details
       if (rtResult.status === 'fulfilled' && rtResult.value && !rtResult.value.error) {
         const rtData = rtResult.value;
         if (rtData.criticScore !== undefined && rtData.criticScore !== null) {
@@ -406,7 +379,6 @@ export default function App() {
         }
       }
 
-      // 4. Update state
       setShows(prev => prev.map(s => {
         if (s.id === showId) {
           return {
@@ -437,125 +409,140 @@ export default function App() {
       }
       return false;
     }
-  };
+  }, [triggerToast]);
 
-  const handleImportNewShows = (newShows) => {
-    // Generate IDs for imported shows
-    const showsToImport = newShows.map(show => ({
+  const handleImportNewShows = useCallback((newShows) => {
+    const stamp = Date.now();
+    const showsToImport = newShows.map((show, i) => ({
       ...show,
-      id: `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `imported-${stamp}-${i}-${Math.random().toString(36).slice(2, 11)}`,
       featured: false
     }));
 
     setShows(prev => [...showsToImport, ...prev]);
     triggerToast(`Imported ${showsToImport.length} shows!`, 'success');
 
-    // Run background resolver to fetch details for each imported show
-    showsToImport.forEach(async (importedShow) => {
-      let currentImdbId = importedShow.imdbId || null;
-      let currentImdbRating = importedShow.ratings?.imdb || null;
-      let currentPosterUrl = importedShow.posterUrl || null;
-      let currentOverview = importedShow.overview || '';
-      let currentGenres = importedShow.genres || [];
-      let currentYear = importedShow.year || null;
-      const isTv = importedShow.type === 'tv';
-      let currentTotalSeasons = importedShow.totalSeasons || null;
+    // Background resolver: fetch details for each imported show, then flush
+    // every resolved patch back into state in ONE setShows call.
+    (async () => {
+      const settled = await Promise.allSettled(showsToImport.map(async (importedShow) => {
+        let currentImdbId = importedShow.imdbId || null;
+        let currentImdbRating = importedShow.ratings?.imdb || null;
+        let currentPosterUrl = importedShow.posterUrl || null;
+        let currentOverview = importedShow.overview || '';
+        let currentGenres = importedShow.genres || [];
+        let currentYear = importedShow.year || null;
+        const isTv = importedShow.type === 'tv';
+        let currentTotalSeasons = importedShow.totalSeasons || null;
 
-      // Fetch IMDb details & rating
-      try {
-        const imdbData = await fetchImdbDetails(currentImdbId, importedShow.title, importedShow.year);
-        if (imdbData) {
-          if (imdbData.imdbId) currentImdbId = imdbData.imdbId;
-          if (imdbData.rating) currentImdbRating = imdbData.rating;
-          if (imdbData.overview) currentOverview = imdbData.overview;
-          if (imdbData.posterUrl) currentPosterUrl = imdbData.posterUrl;
-          if (imdbData.genres && imdbData.genres.length > 0) currentGenres = imdbData.genres;
-          if (imdbData.year) currentYear = imdbData.year;
-          if (imdbData.totalSeasons && !currentTotalSeasons) currentTotalSeasons = parseInt(imdbData.totalSeasons, 10);
-        }
-      } catch (e) {
-        console.error(`Error background-resolving IMDb for ${importedShow.title}:`, e);
-      }
-
-      // Fetch Letterboxd rating
-      let lbRating = null;
-      let lbSlug = null;
-      let lbPoster = null;
-
-      try {
-        const lbData = await fetchLetterboxd(importedShow.title, currentYear, currentImdbId, isTv);
-        if (lbData && !lbData.error) {
-          lbRating = lbData.rating ? parseFloat(lbData.rating) : null;
-          lbSlug = lbData.slug || null;
-          lbPoster = lbData.poster || null;
-        }
-      } catch (err) {
-        console.error(`Error background-resolving Letterboxd for ${importedShow.title}:`, err);
-      }
-
-      // Fetch Rotten Tomatoes details (including seasons if TV)
-      let rtCritic = importedShow.ratings?.rottenTomatoes || null;
-      let rtAudience = importedShow.ratings?.rottenTomatoesAudience || null;
-      let rtUrl = importedShow.rottenTomatoesUrl || null;
-      let rtSeasons = importedShow.seasons || null;
-
-      try {
-        const rtData = await fetchRottenTomatoes(importedShow.title, currentYear, isTv);
-        if (rtData && !rtData.error) {
-          if (rtData.criticScore !== undefined && rtData.criticScore !== null) rtCritic = parseInt(rtData.criticScore, 10);
-          if (rtData.audienceScore !== undefined && rtData.audienceScore !== null) rtAudience = parseInt(rtData.audienceScore, 10);
-          if (rtData.url) rtUrl = rtData.url;
-          if (rtData.seasons && rtData.seasons.length > 0) {
-            rtSeasons = rtData.seasons;
-            if (!currentTotalSeasons) currentTotalSeasons = rtData.seasons.length;
+        try {
+          const imdbData = await fetchImdbDetails(currentImdbId, importedShow.title, importedShow.year);
+          if (imdbData) {
+            if (imdbData.imdbId) currentImdbId = imdbData.imdbId;
+            if (imdbData.rating) currentImdbRating = imdbData.rating;
+            if (imdbData.overview) currentOverview = imdbData.overview;
+            if (imdbData.posterUrl) currentPosterUrl = imdbData.posterUrl;
+            if (imdbData.genres && imdbData.genres.length > 0) currentGenres = imdbData.genres;
+            if (imdbData.year) currentYear = imdbData.year;
+            if (imdbData.totalSeasons && !currentTotalSeasons) currentTotalSeasons = parseInt(imdbData.totalSeasons, 10);
           }
+        } catch (e) {
+          console.error(`Error background-resolving IMDb for ${importedShow.title}:`, e);
         }
-      } catch (err) {
-        console.error(`Error background-resolving RT for ${importedShow.title}:`, err);
-      }
 
-      // Merge resolved details back into state
-      setShows(prev => prev.map(s => {
-        if (s.id === importedShow.id) {
-          return {
-            ...s,
-            imdbId: currentImdbId || s.imdbId,
-            posterUrl: currentPosterUrl || lbPoster || s.posterUrl || null,
-            overview: currentOverview || s.overview,
-            genres: currentGenres.length > 0 ? currentGenres : s.genres,
-            year: currentYear || s.year,
-            totalSeasons: currentTotalSeasons || s.totalSeasons || null,
-            seasons: rtSeasons || s.seasons || null,
-            ratings: {
-              ...s.ratings,
-              imdb: currentImdbRating || s.ratings.imdb,
-              letterboxd: lbRating || s.ratings.letterboxd,
-              rottenTomatoes: rtCritic !== null ? rtCritic : s.ratings.rottenTomatoes,
-              rottenTomatoesAudience: rtAudience !== null ? rtAudience : s.ratings.rottenTomatoesAudience
-            },
-            letterboxdSlug: lbSlug || s.letterboxdSlug || null,
-            rottenTomatoesUrl: rtUrl || s.rottenTomatoesUrl || null
-          };
+        let lbRating = null;
+        let lbSlug = null;
+        let lbPoster = null;
+        try {
+          const lbData = await fetchLetterboxd(importedShow.title, currentYear, currentImdbId, isTv);
+          if (lbData && !lbData.error) {
+            lbRating = lbData.rating ? parseFloat(lbData.rating) : null;
+            lbSlug = lbData.slug || null;
+            lbPoster = lbData.poster || null;
+          }
+        } catch (err) {
+          console.error(`Error background-resolving Letterboxd for ${importedShow.title}:`, err);
         }
-        return s;
+
+        let rtCritic = importedShow.ratings?.rottenTomatoes || null;
+        let rtAudience = importedShow.ratings?.rottenTomatoesAudience || null;
+        let rtUrl = importedShow.rottenTomatoesUrl || null;
+        let rtSeasons = importedShow.seasons || null;
+        try {
+          const rtData = await fetchRottenTomatoes(importedShow.title, currentYear, isTv);
+          if (rtData && !rtData.error) {
+            if (rtData.criticScore !== undefined && rtData.criticScore !== null) rtCritic = parseInt(rtData.criticScore, 10);
+            if (rtData.audienceScore !== undefined && rtData.audienceScore !== null) rtAudience = parseInt(rtData.audienceScore, 10);
+            if (rtData.url) rtUrl = rtData.url;
+            if (rtData.seasons && rtData.seasons.length > 0) {
+              rtSeasons = rtData.seasons;
+              if (!currentTotalSeasons) currentTotalSeasons = rtData.seasons.length;
+            }
+          }
+        } catch (err) {
+          console.error(`Error background-resolving RT for ${importedShow.title}:`, err);
+        }
+
+        return {
+          id: importedShow.id,
+          currentImdbId, currentImdbRating, currentPosterUrl, currentOverview,
+          currentGenres, currentYear, currentTotalSeasons,
+          lbRating, lbSlug, lbPoster, rtCritic, rtAudience, rtUrl, rtSeasons
+        };
       }));
-    });
-  };
+
+      const patches = new Map();
+      for (const r of settled) {
+        if (r.status === 'fulfilled' && r.value) patches.set(r.value.id, r.value);
+      }
+      if (patches.size === 0) return;
+
+      setShows(prev => prev.map(s => {
+        const p = patches.get(s.id);
+        if (!p) return s;
+        return {
+          ...s,
+          imdbId: p.currentImdbId || s.imdbId,
+          posterUrl: p.currentPosterUrl || p.lbPoster || s.posterUrl || null,
+          overview: p.currentOverview || s.overview,
+          genres: p.currentGenres.length > 0 ? p.currentGenres : s.genres,
+          year: p.currentYear || s.year,
+          totalSeasons: p.currentTotalSeasons || s.totalSeasons || null,
+          seasons: p.rtSeasons || s.seasons || null,
+          ratings: {
+            ...s.ratings,
+            imdb: p.currentImdbRating || s.ratings.imdb,
+            letterboxd: p.lbRating || s.ratings.letterboxd,
+            rottenTomatoes: p.rtCritic !== null ? p.rtCritic : s.ratings.rottenTomatoes,
+            rottenTomatoesAudience: p.rtAudience !== null ? p.rtAudience : s.ratings.rottenTomatoesAudience
+          },
+          letterboxdSlug: p.lbSlug || s.letterboxdSlug || null,
+          rottenTomatoesUrl: p.rtUrl || s.rottenTomatoesUrl || null
+        };
+      }));
+    })();
+  }, [triggerToast]);
 
   const handleResetAllData = () => {
     setShows(initialShows);
     setReviewers(migrateReviewers(initialReviewers));
     setWatchlist([]);
     setWatchedHistory([]);
-    localStorage.clear();
     triggerToast(`All application data has been reset to defaults.`, 'success');
   };
 
   const handleImportData = (imported) => {
-    if (imported.shows) setShows(imported.shows);
-    if (imported.reviewers) setReviewers(migrateReviewers(imported.reviewers));
-    if (imported.watchlist) setWatchlist(imported.watchlist);
-    if (imported.watchedHistory) setWatchedHistory(imported.watchedHistory);
+    const isArr = Array.isArray;
+    let applied = false;
+    if (imported && isArr(imported.shows)) { setShows(imported.shows); applied = true; }
+    if (imported && isArr(imported.reviewers)) { setReviewers(migrateReviewers(imported.reviewers)); applied = true; }
+    if (imported && isArr(imported.watchlist)) { setWatchlist(imported.watchlist); applied = true; }
+    if (imported && isArr(imported.watchedHistory)) { setWatchedHistory(imported.watchedHistory); applied = true; }
+    if (!applied) {
+      triggerToast('Import failed: unrecognised file', 'error');
+      return;
+    }
+    triggerToast('Data imported successfully.', 'success');
   };
 
   const handleExportDataJSON = () => {
@@ -568,139 +555,117 @@ export default function App() {
   };
 
   // --- SIEVING & FILTERING LOGIC ---
-  const calculateShowScore = (show) => {
-    let total = 0;
-    let count = 0;
-    if (show.ratings.imdb !== undefined && show.ratings.imdb !== null) {
-      total += show.ratings.imdb / 2;
-      count++;
-    }
-    if (show.ratings.rottenTomatoesAudience !== undefined && show.ratings.rottenTomatoesAudience !== null) {
-      total += show.ratings.rottenTomatoesAudience / 20;
-      count++;
-    }
-    if (show.ratings.letterboxd !== undefined && show.ratings.letterboxd !== null) {
-      total += show.ratings.letterboxd;
-      count++;
-    } else if (show.type === 'tv' && show.ratings.rottenTomatoes !== undefined && show.ratings.rottenTomatoes !== null) {
-      total += show.ratings.rottenTomatoes / 20;
-      count++;
-    }
-    return count > 0 ? total / count : 0;
-  };
 
   // Filter shows by active media mode (movie vs tv)
-  const currentMediaShows = React.useMemo(() => {
+  const currentMediaShows = useMemo(() => {
     return shows.filter(s => (s.type || 'movie') === activeMediaType);
   }, [shows, activeMediaType]);
 
-  // Total shows in DB for current media type
   const totalShowsInDb = currentMediaShows.length;
 
-  // Perform Sieving
-  const sievedShows = React.useMemo(() => {
-    return currentMediaShows.filter(show => {
-      // 1. Sieve threshold check: Must be greater than minimum threshold (e.g. 3.0/5)
-      // If the user is explicitly searching for a title, bypass the sieve score threshold
-      const titleMatchesSearch = searchTerm && show.title.toLowerCase().includes(searchTerm.toLowerCase());
-      const score = calculateShowScore(show);
-      const isUnrated = show.ratings.imdb === null && show.ratings.rottenTomatoes === null && show.ratings.letterboxd === null && show.ratings.rottenTomatoesAudience === null;
-      
-      if (!titleMatchesSearch) {
-        if (isUnrated) {
-          if (!includeUnrated) return false;
-        } else {
-          if (score <= minSieveScore) return false;
-        }
-      }
+  // Single pass: partition current-media shows into { passed, sieved } using the
+  // exact same rules, then apply search / platform / language to both sides.
+  const { passed, sieved } = useMemo(() => {
+    const term = searchTerm.toLowerCase();
 
-      // 2. Search Text
-      if (searchTerm && !show.title.toLowerCase().includes(searchTerm.toLowerCase()) && 
-          !show.genres.some(g => g.toLowerCase().includes(searchTerm.toLowerCase()))) {
+    const matchesFilters = (show) => {
+      if (searchTerm &&
+          !show.title.toLowerCase().includes(term) &&
+          !show.genres.some(g => g.toLowerCase().includes(term))) {
         return false;
       }
-
-      // 3. Platform
       if (selectedPlatform !== 'All' && show.platform !== selectedPlatform) {
         return false;
       }
-
-      // 4. Language
       if (selectedLanguage !== 'All') {
         if (selectedLanguage === 'Other') {
-          // If language is not one of the main ones
           return !['tamil', 'english', 'malayalam', 'hindi'].includes(show.language.toLowerCase());
-        } else {
-          return show.language.toLowerCase() === selectedLanguage.toLowerCase();
         }
+        return show.language.toLowerCase() === selectedLanguage.toLowerCase();
       }
-
       return true;
-    });
-  }, [currentMediaShows, searchTerm, selectedLanguage, selectedPlatform, minSieveScore, includeUnrated]);
+    };
 
-  // Perform Sieving for Sieved Out Shows
-  const sievedOutShows = React.useMemo(() => {
-    return currentMediaShows.filter(show => {
-      // 1. Sieve threshold check: Must be LESS than or equal to minimum threshold (e.g. 3.0/5)
-      // or unrated if includeUnrated is false.
-      const titleMatchesSearch = searchTerm && show.title.toLowerCase().includes(searchTerm.toLowerCase());
-      const score = calculateShowScore(show);
-      const isUnrated = show.ratings.imdb === null && show.ratings.rottenTomatoes === null && show.ratings.letterboxd === null && show.ratings.rottenTomatoesAudience === null;
-      
-      let isSievedOut = false;
+    const passedList = [];
+    const sievedList = [];
+
+    for (const show of currentMediaShows) {
+      // A title-search match bypasses the sieve threshold entirely.
+      const titleMatchesSearch = searchTerm && show.title.toLowerCase().includes(term);
+      const score = calculateSieveScore(show);
+      const unrated = isUnrated(show);
+
+      let sievedOut = false;
       if (!titleMatchesSearch) {
-        if (isUnrated) {
-          if (!includeUnrated) isSievedOut = true;
-        } else {
-          if (score <= minSieveScore) isSievedOut = true;
+        if (unrated) {
+          if (!includeUnrated) sievedOut = true;
+        } else if (score <= minSieveScore) {
+          sievedOut = true;
         }
       }
 
-      if (!isSievedOut) return false;
+      if (!matchesFilters(show)) continue;
+      (sievedOut ? sievedList : passedList).push(show);
+    }
 
-      // 2. Search Text
-      if (searchTerm && !show.title.toLowerCase().includes(searchTerm.toLowerCase()) && 
-          !show.genres.some(g => g.toLowerCase().includes(searchTerm.toLowerCase()))) {
-        return false;
-      }
-
-      // 3. Platform
-      if (selectedPlatform !== 'All' && show.platform !== selectedPlatform) {
-        return false;
-      }
-
-      // 4. Language
-      if (selectedLanguage !== 'All') {
-        if (selectedLanguage === 'Other') {
-          return !['tamil', 'english', 'malayalam', 'hindi'].includes(show.language.toLowerCase());
-        } else {
-          return show.language.toLowerCase() === selectedLanguage.toLowerCase();
-        }
-      }
-
-      return true;
-    });
+    return { passed: passedList, sieved: sievedList };
   }, [currentMediaShows, searchTerm, selectedLanguage, selectedPlatform, minSieveScore, includeUnrated]);
 
-  // Compute how many got sieved out due to rating threshold alone
-  const sievedOutCount = React.useMemo(() => {
+  const sievedShows = passed;
+  const sievedOutShows = sieved;
+
+  // How many titles are sieved out on rating grounds alone (ignores text filters).
+  const sievedOutCount = useMemo(() => {
     return currentMediaShows.filter(show => {
-      const score = calculateShowScore(show);
-      const isUnrated = show.ratings.imdb === null && show.ratings.rottenTomatoes === null && show.ratings.letterboxd === null && show.ratings.rottenTomatoesAudience === null;
-      if (includeUnrated && isUnrated) return false;
-      return score <= minSieveScore;
+      if (includeUnrated && isUnrated(show)) return false;
+      return calculateSieveScore(show) <= minSieveScore;
     }).length;
   }, [currentMediaShows, minSieveScore, includeUnrated]);
 
-  // Extract unique platforms for select dropdown
-  const uniquePlatforms = React.useMemo(() => {
+  const uniquePlatforms = useMemo(() => {
     const list = new Set();
     currentMediaShows.forEach(s => {
       if (s.platform) list.add(s.platform);
     });
     return Array.from(list);
   }, [currentMediaShows]);
+
+  // Stable membership lookup so filter keystrokes don't rebuild every card's props
+  const watchlistIds = useMemo(() => new Set(watchlist.map(w => w.id)), [watchlist]);
+
+  const clearFilters = useCallback(() => {
+    setSearchTerm('');
+    setSelectedLanguage('All');
+    setSelectedPlatform('All');
+    setMinSieveScore(3.0);
+    setIncludeUnrated(true);
+  }, []);
+
+  const isGridTab = activeTab === 'recommendations' || activeTab === 'sieved_out';
+
+  const filterBarProps = {
+    searchTerm,
+    onSearchTermChange: setSearchTerm,
+    selectedLanguage,
+    onLanguageChange: setSelectedLanguage,
+    selectedPlatform,
+    onPlatformChange: setSelectedPlatform,
+    uniquePlatforms,
+    minSieveScore,
+    onMinSieveScoreChange: setMinSieveScore,
+    includeUnrated,
+    onIncludeUnratedChange: setIncludeUnrated,
+  };
+
+  const gridHandlerProps = {
+    watchlistIds,
+    onToggleWatchlist: handleToggleWatchlist,
+    onDeleteShow: handleDeleteShow,
+    onRefreshShowRatings: handleRefreshShowRatings,
+    reviewers,
+    minSieveScore,
+    includeUnrated,
+  };
 
   return (
     <div className="app-container">
@@ -713,7 +678,7 @@ export default function App() {
 
         {/* Media Mode Switcher */}
         <div className="media-mode-switcher">
-          <button 
+          <button
             id="media-mode-movie-btn"
             className={`media-mode-btn ${activeMediaType === 'movie' ? 'active' : ''}`}
             onClick={() => setActiveMediaType('movie')}
@@ -722,7 +687,7 @@ export default function App() {
             <span className="media-mode-btn-icon">🎬</span>
             <span>Movies</span>
           </button>
-          <button 
+          <button
             id="media-mode-tv-btn"
             className={`media-mode-btn ${activeMediaType === 'tv' ? 'active' : ''}`}
             onClick={() => setActiveMediaType('tv')}
@@ -736,17 +701,17 @@ export default function App() {
         <nav>
           <ul className="nav-menu">
             <li>
-              <button 
+              <button
                 id="nav-btn-feed"
                 className={`nav-item ${activeTab === 'recommendations' ? 'active' : ''}`}
                 onClick={() => setActiveTab('recommendations')}
               >
-                <Compass />
+                <Sparkles />
                 Recommendations
               </button>
             </li>
             <li>
-              <button 
+              <button
                 id="nav-btn-sieved-out"
                 className={`nav-item ${activeTab === 'sieved_out' ? 'active' : ''}`}
                 onClick={() => setActiveTab('sieved_out')}
@@ -756,7 +721,17 @@ export default function App() {
               </button>
             </li>
             <li>
-              <button 
+              <button
+                id="nav-btn-tracker"
+                className={`nav-item ${activeTab === 'tracker' ? 'active' : ''}`}
+                onClick={() => setActiveTab('tracker')}
+              >
+                <Compass />
+                Discover
+              </button>
+            </li>
+            <li>
+              <button
                 id="nav-btn-wheel"
                 className={`nav-item ${activeTab === 'wheel' ? 'active' : ''}`}
                 onClick={() => setActiveTab('wheel')}
@@ -766,26 +741,7 @@ export default function App() {
               </button>
             </li>
             <li>
-              <button 
-                id="nav-btn-tracker"
-                className={`nav-item ${activeTab === 'tracker' ? 'active' : ''}`}
-                onClick={() => setActiveTab('tracker')}
-              >
-                <Calendar />
-                Discover
-              </button>
-            </li>
-            <li>
               <button
-                id="nav-btn-sieve-india"
-                className={`nav-item ${activeTab === 'sieve_india' ? 'active' : ''}`}
-                onClick={() => setActiveTab('sieve_india')}
-              >
-                Sieve India
-              </button>
-            </li>
-            <li>
-              <button 
                 id="nav-btn-watchlist"
                 className={`nav-item ${activeTab === 'watchlist' ? 'active' : ''}`}
                 onClick={() => setActiveTab('watchlist')}
@@ -795,7 +751,7 @@ export default function App() {
               </button>
             </li>
             <li>
-              <button 
+              <button
                 id="nav-btn-settings"
                 className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
                 onClick={() => setActiveTab('settings')}
@@ -809,16 +765,16 @@ export default function App() {
 
         {/* Global Action Button */}
         <div style={{ padding: '0.75rem 1rem', borderTop: '1px solid var(--border-color)', marginTop: 'auto' }}>
-          <button 
+          <button
             id="sidebar-add-title-btn"
             className="btn btn-primary"
             onClick={() => setShowAddTitleModal(true)}
-            style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '0.5rem', 
-              width: '100%', 
-              justifyContent: 'center', 
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              width: '100%',
+              justifyContent: 'center',
               padding: '0.6rem',
               fontSize: '0.85rem',
               fontWeight: '700'
@@ -842,475 +798,187 @@ export default function App() {
 
       {/* MAIN CONTENT WORKSPACE */}
       <main className="main-content">
-        {/* HEADER BAR */}
-        <header className="content-header">
-          <div className="header-title-container">
+        {isLoadingData ? (
+          <div className="empty-state" style={{ marginTop: '4rem' }}>
+            <div className="empty-icon">🍿</div>
+            <h3>Loading FlickSieve…</h3>
+            <p>Reading your saved titles, reviewers and watchlist.</p>
+          </div>
+        ) : (
+          <>
+            {/* HEADER BAR */}
+            <header className="content-header">
+              <div className="header-title-container">
+                {activeTab === 'recommendations' && (
+                  <>
+                    <h1>{activeMediaType === 'tv' ? 'Sieved TV Recommendations' : 'Sieved Movie Recommendations'}</h1>
+                    <p className="header-subtitle">
+                      {activeMediaType === 'tv'
+                        ? `Aggregating IMDb, RT Audience, and RT Critics (with season breakdown). Only ratings > ${minSieveScore}/5 shown.`
+                        : `Aggregating IMDb, Rotten Tomatoes, and Letterboxd. Only ratings > ${minSieveScore}/5 shown.`}
+                    </p>
+                  </>
+                )}
+                {activeTab === 'sieved_out' && (
+                  <>
+                    <h1>{activeMediaType === 'tv' ? 'Sieved Out TV Shows' : 'Sieved Out Movies'}</h1>
+                    <p className="header-subtitle">
+                      {activeMediaType === 'tv' ? 'TV shows' : 'Movies'} with average ratings below your sieve limit ({minSieveScore}/5) or unrated titles.
+                    </p>
+                  </>
+                )}
+                {activeTab === 'wheel' && (
+                  <>
+                    <h1>Decision Paralysis Solver</h1>
+                    <p className="header-subtitle">
+                      {activeMediaType === 'tv'
+                        ? "Can't decide which TV series to binge next? Let the FlickSieve wheel do it."
+                        : "Can't decide what movie to watch? Let the FlickSieve wheel do it."}
+                    </p>
+                  </>
+                )}
+                {activeTab === 'tracker' && (
+                  <>
+                    <h1>Discover</h1>
+                    <p className="header-subtitle">
+                      {activeMediaType === 'tv'
+                        ? 'Weekly streaming season premieres and popular new TV series.'
+                        : 'Weekly digital premieres and streaming updates.'}
+                    </p>
+                  </>
+                )}
+                {activeTab === 'watchlist' && (
+                  <>
+                    <h1>Your Watch Queue</h1>
+                    <p className="header-subtitle">
+                      {activeMediaType === 'tv'
+                        ? 'Track episode & season progress and log completed series or seasons.'
+                        : 'Keep track of what to watch and write logs for completed titles.'}
+                    </p>
+                  </>
+                )}
+                {activeTab === 'settings' && (
+                  <>
+                    <h1>Application Configuration</h1>
+                    <p className="header-subtitle">Customize YouTube reviewers, manage database titles, and export backups.</p>
+                  </>
+                )}
+              </div>
+
+              {/* QUICK DASHBOARD SUMMARY METRICS — grid tabs only */}
+              {isGridTab && (
+                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                  <div
+                    className={`rating-item rating-clickable ${activeTab === 'recommendations' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('recommendations')}
+                    style={{ padding: '0.5rem 1rem', display: 'flex', flexDirection: 'row', gap: '0.75rem', alignItems: 'center' }}
+                  >
+                    <div style={{ textAlign: 'left' }}>
+                      <span className="rating-source-label" style={{ fontSize: '0.6rem' }}>
+                        {activeMediaType === 'tv' ? 'TV in DB' : 'Movies in DB'}
+                      </span>
+                      <span className="rating-value" style={{ fontSize: '1.1rem' }}>{totalShowsInDb}</span>
+                    </div>
+                  </div>
+                  <div
+                    className={`rating-item sieved-out-metric-clickable ${activeTab === 'sieved_out' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('sieved_out')}
+                    style={{ padding: '0.5rem 1rem', display: 'flex', flexDirection: 'row', gap: '0.75rem', alignItems: 'center', borderColor: 'rgba(239, 68, 68, 0.25)', background: 'rgba(239, 68, 68, 0.05)' }}
+                  >
+                    <div style={{ textAlign: 'left' }}>
+                      <span className="rating-source-label" style={{ fontSize: '0.6rem', color: 'var(--error)' }}>Sieved Out</span>
+                      <span className="rating-value" style={{ fontSize: '1.1rem', color: 'var(--error)' }}>{sievedOutCount}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </header>
+
+            {/* --- VIEW ROUTER --- */}
+
             {activeTab === 'recommendations' && (
-              <>
-                <h1>{activeMediaType === 'tv' ? 'Sieved TV Recommendations' : 'Sieved Movie Recommendations'}</h1>
-                <p className="header-subtitle">
-                  {activeMediaType === 'tv' 
-                    ? `Aggregating IMDb, RT Audience, and RT Critics (with season breakdown). Only ratings > ${minSieveScore}/5 shown.`
-                    : `Aggregating IMDb, Rotten Tomatoes, and Letterboxd. Only ratings > ${minSieveScore}/5 shown.`}
-                </p>
-              </>
+              <div>
+                <FilterBar {...filterBarProps} searchPlaceholder="Search by title, genre..." />
+                <ShowGrid
+                  {...gridHandlerProps}
+                  shows={sievedShows}
+                  emptyIcon="🕳️"
+                  emptyTitle="All Content Sieved Out"
+                  emptyText={`Everything in this filter subset fell below your minimum sieve threshold of ${minSieveScore}/5, or no titles match the query.`}
+                  onClearFilters={clearFilters}
+                />
+              </div>
             )}
+
             {activeTab === 'sieved_out' && (
-              <>
-                <h1>{activeMediaType === 'tv' ? 'Sieved Out TV Shows' : 'Sieved Out Movies'}</h1>
-                <p className="header-subtitle">
-                  {activeMediaType === 'tv' ? 'TV shows' : 'Movies'} with average ratings below your sieve limit ({minSieveScore}/5) or unrated titles.
-                </p>
-              </>
+              <div>
+                <FilterBar {...filterBarProps} searchPlaceholder="Search sieved out titles, genre..." />
+                <ShowGrid
+                  {...gridHandlerProps}
+                  shows={sievedOutShows}
+                  emptyIcon="✨"
+                  emptyTitle="No Sieved Out Titles"
+                  emptyText={`No titles in this filter subset fell below your minimum sieve threshold of ${minSieveScore}/5.`}
+                  onClearFilters={clearFilters}
+                />
+              </div>
             )}
+
             {activeTab === 'wheel' && (
-              <>
-                <h1>Decision Paralysis Solver</h1>
-                <p className="header-subtitle">
-                  {activeMediaType === 'tv' 
-                    ? "Can't decide which TV series to binge next? Let the FlickSieve wheel do it." 
-                    : "Can't decide what movie to watch? Let the FlickSieve wheel do it."}
-                </p>
-              </>
+              <DeciderWheel
+                matchingShows={sievedShows}
+                onToggleWatchlist={handleToggleWatchlist}
+                watchlist={watchlist}
+              />
             )}
+
             {activeTab === 'tracker' && (
-              <>
-                <h1>Discover</h1>
-                <p className="header-subtitle">
-                  {activeMediaType === 'tv'
-                    ? 'Weekly streaming season premieres and popular new TV series.'
-                    : 'Weekly digital premieres and streaming updates.'}
-                </p>
-              </>
+              <OttTracker
+                shows={shows}
+                watchlist={watchlist}
+                onToggleWatchlist={handleToggleWatchlist}
+                reviewers={reviewers}
+                onImportNewShows={handleImportNewShows}
+                mediaType={activeMediaType}
+              />
             )}
+
             {activeTab === 'watchlist' && (
-              <>
-                <h1>Your Watch Queue</h1>
-                <p className="header-subtitle">
-                  {activeMediaType === 'tv'
-                    ? 'Track episode & season progress and log completed series or seasons.'
-                    : 'Keep track of what to watch and write logs for completed titles.'}
-                </p>
-              </>
+              <Watchlist
+                watchlist={watchlist}
+                onRemoveFromWatchlist={handleRemoveFromWatchlist}
+                watchedHistory={watchedHistory}
+                onAddToHistory={handleAddToHistory}
+                onRemoveFromHistory={handleRemoveFromHistory}
+                onUpdateWatchlistShow={handleUpdateWatchlistShow}
+                mediaType={activeMediaType}
+              />
             )}
+
             {activeTab === 'settings' && (
-              <>
-                <h1>Application Configuration</h1>
-                <p className="header-subtitle">Customize YouTube reviewers, manage database titles, and export backups.</p>
-              </>
+              <Settings
+                shows={shows}
+                reviewers={reviewers}
+                onAddReviewer={handleAddReviewer}
+                onDeleteReviewer={handleDeleteReviewer}
+                onUpdateReviewer={handleUpdateReviewer}
+                onDeleteShow={handleDeleteShow}
+                onRefreshShowRatings={handleRefreshShowRatings}
+                onResetAllData={handleResetAllData}
+                onImportData={handleImportData}
+                exportDataJSON={handleExportDataJSON}
+                theme={theme}
+                onThemeChange={setTheme}
+                dataFolder={dataFolder}
+                onUpdateDataFolder={handleUpdateDataFolder}
+              />
             )}
-          </div>
-
-          {/* QUICK DASHBOARD SUMMARY METRICS */}
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-            <div 
-              className={`rating-item rating-clickable ${activeTab === 'recommendations' ? 'active' : ''}`}
-              onClick={() => setActiveTab('recommendations')}
-              style={{ padding: '0.5rem 1rem', display: 'flex', flexDirection: 'row', gap: '0.75rem', alignItems: 'center' }}
-            >
-              <div style={{ textAlign: 'left' }}>
-                <span className="rating-source-label" style={{ fontSize: '0.6rem' }}>
-                  {activeMediaType === 'tv' ? 'TV in DB' : 'Movies in DB'}
-                </span>
-                <span className="rating-value" style={{ fontSize: '1.1rem' }}>{totalShowsInDb}</span>
-              </div>
-            </div>
-            <div 
-              className={`rating-item sieved-out-metric-clickable ${activeTab === 'sieved_out' ? 'active' : ''}`}
-              onClick={() => setActiveTab('sieved_out')}
-              style={{ padding: '0.5rem 1rem', display: 'flex', flexDirection: 'row', gap: '0.75rem', alignItems: 'center', borderColor: 'rgba(239, 68, 68, 0.25)', background: 'rgba(239, 68, 68, 0.05)' }}
-            >
-              <div style={{ textAlign: 'left' }}>
-                <span className="rating-source-label" style={{ fontSize: '0.6rem', color: 'var(--error)' }}>Sieved Out</span>
-                <span className="rating-value" style={{ fontSize: '1.1rem', color: 'var(--error)' }}>{sievedOutCount}</span>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* --- VIEW ROUTER --- */}
-
-        {/* VIEW 1: RECOMMENDATIONS FEED */}
-        {activeTab === 'recommendations' && (
-          <div>
-            {/* Filters dashboard */}
-            <div className="controls-bar">
-              {/* Row 1: Search & Basic select dropdowns */}
-              <div className="controls-row-top">
-                <div className="search-wrapper">
-                  <SearchIcon className="search-icon" />
-                  <input
-                    type="text"
-                    id="search-main"
-                    className="search-input"
-                    placeholder="Search by title, genre..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-
-                <select
-                  id="filter-platform"
-                  className="filter-select"
-                  value={selectedPlatform}
-                  onChange={(e) => setSelectedPlatform(e.target.value)}
-                >
-                  <option value="All">All Streaming</option>
-                  {uniquePlatforms.map(plat => (
-                    <option key={plat} value={plat}>{plat}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Row 2: Custom buttons for language toggle and ratings sieve slider */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
-                {/* Language Toggles */}
-                <div className="filter-pills-row">
-                  <span className="pill-group-label">Languages</span>
-                  <button
-                    className={`pill ${selectedLanguage === 'All' ? 'active' : ''}`}
-                    onClick={() => setSelectedLanguage('All')}
-                  >
-                    All
-                  </button>
-                  <button
-                    className={`pill pill-native ${selectedLanguage === 'Tamil' ? 'active' : ''}`}
-                    onClick={() => setSelectedLanguage('Tamil')}
-                  >
-                    Tamil (Native)
-                  </button>
-                  <button
-                    className={`pill ${selectedLanguage === 'English' ? 'active' : ''}`}
-                    onClick={() => setSelectedLanguage('English')}
-                  >
-                    English
-                  </button>
-                  <button
-                    className={`pill ${selectedLanguage === 'Malayalam' ? 'active' : ''}`}
-                    onClick={() => setSelectedLanguage('Malayalam')}
-                  >
-                    Malayalam
-                  </button>
-                  <button
-                    className={`pill ${selectedLanguage === 'Hindi' ? 'active' : ''}`}
-                    onClick={() => setSelectedLanguage('Hindi')}
-                  >
-                    Hindi
-                  </button>
-                  <button
-                    className={`pill ${selectedLanguage === 'Other' ? 'active' : ''}`}
-                    onClick={() => setSelectedLanguage('Other')}
-                  >
-                    Other
-                  </button>
-                </div>
-
-                {/* Sieve Severity Slider */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', backgroundColor: 'var(--bg-tertiary)', padding: '0.5rem 1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Filter size={14} style={{ color: 'var(--accent-primary)' }} />
-                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                      Sieve Limit: &gt; {minSieveScore.toFixed(1)}/5
-                    </span>
-                    <input
-                      type="range"
-                      id="sieve-slider"
-                      min="3.0"
-                      max="4.5"
-                      step="0.1"
-                      value={minSieveScore}
-                      onChange={(e) => setMinSieveScore(parseFloat(e.target.value))}
-                      style={{ cursor: 'pointer', accentColor: 'var(--accent-primary)', width: '100px' }}
-                    />
-                  </div>
-                  <label 
-                    style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: '0.35rem', 
-                      fontSize: '0.8rem', 
-                      color: 'var(--text-secondary)', 
-                      cursor: 'pointer', 
-                      borderLeft: '1px solid var(--border-color)', 
-                      paddingLeft: '0.75rem' 
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      id="checkbox-include-unrated"
-                      checked={includeUnrated}
-                      onChange={(e) => setIncludeUnrated(e.target.checked)}
-                      style={{ accentColor: 'var(--accent-primary)', cursor: 'pointer' }}
-                    />
-                    Include Unrated
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            {/* Results Grid */}
-            {sievedShows.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">🕳️</div>
-                <h3>All Content Sieved Out</h3>
-                <p>Everything in this filter subset fell below your minimum sieve threshold of {minSieveScore}/5, or no titles match the query.</p>
-                <button 
-                  className="btn btn-primary" 
-                  onClick={() => {
-                    setSearchTerm('');
-                    setSelectedLanguage('All');
-                    setSelectedPlatform('All');
-                    setMinSieveScore(3.0);
-                    setIncludeUnrated(true);
-                  }}
-                  style={{ marginTop: '1.25rem' }}
-                >
-                  Reset All Filters
-                </button>
-              </div>
-            ) : (
-              <div className="shows-grid">
-                {sievedShows.map(show => (
-                  <ShowCard
-                    key={show.id}
-                    show={show}
-                    isInWatchlist={watchlist.some(item => item.id === show.id)}
-                    onToggleWatchlist={handleToggleWatchlist}
-                    onDeleteShow={handleDeleteShow}
-                    onRefreshShowRatings={handleRefreshShowRatings}
-                    reviewers={reviewers}
-                    minSieveScore={minSieveScore}
-                    includeUnrated={includeUnrated}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* VIEW 1.5: SIEVED OUT FEED */}
-        {activeTab === 'sieved_out' && (
-          <div>
-            {/* Filters dashboard */}
-            <div className="controls-bar">
-              {/* Row 1: Search & Basic select dropdowns */}
-              <div className="controls-row-top">
-                <div className="search-wrapper">
-                  <SearchIcon className="search-icon" />
-                  <input
-                    type="text"
-                    id="search-main-sieved"
-                    className="search-input"
-                    placeholder="Search sieved out titles, genre..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-
-                <select
-                  id="filter-platform-sieved"
-                  className="filter-select"
-                  value={selectedPlatform}
-                  onChange={(e) => setSelectedPlatform(e.target.value)}
-                >
-                  <option value="All">All Streaming</option>
-                  {uniquePlatforms.map(plat => (
-                    <option key={plat} value={plat}>{plat}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Row 2: Custom buttons for language toggle and ratings sieve slider */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
-                {/* Language Toggles */}
-                <div className="filter-pills-row">
-                  <span className="pill-group-label">Languages</span>
-                  <button
-                    className={`pill ${selectedLanguage === 'All' ? 'active' : ''}`}
-                    onClick={() => setSelectedLanguage('All')}
-                  >
-                    All
-                  </button>
-                  <button
-                    className={`pill pill-native ${selectedLanguage === 'Tamil' ? 'active' : ''}`}
-                    onClick={() => setSelectedLanguage('Tamil')}
-                  >
-                    Tamil (Native)
-                  </button>
-                  <button
-                    className={`pill ${selectedLanguage === 'English' ? 'active' : ''}`}
-                    onClick={() => setSelectedLanguage('English')}
-                  >
-                    English
-                  </button>
-                  <button
-                    className={`pill ${selectedLanguage === 'Malayalam' ? 'active' : ''}`}
-                    onClick={() => setSelectedLanguage('Malayalam')}
-                  >
-                    Malayalam
-                  </button>
-                  <button
-                    className={`pill ${selectedLanguage === 'Hindi' ? 'active' : ''}`}
-                    onClick={() => setSelectedLanguage('Hindi')}
-                  >
-                    Hindi
-                  </button>
-                  <button
-                    className={`pill ${selectedLanguage === 'Other' ? 'active' : ''}`}
-                    onClick={() => setSelectedLanguage('Other')}
-                  >
-                    Other
-                  </button>
-                </div>
-
-                {/* Sieve Severity Slider */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', backgroundColor: 'var(--bg-tertiary)', padding: '0.5rem 1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Filter size={14} style={{ color: 'var(--accent-primary)' }} />
-                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                      Sieve Limit: &gt; {minSieveScore.toFixed(1)}/5
-                    </span>
-                    <input
-                      type="range"
-                      id="sieve-slider-sieved"
-                      min="3.0"
-                      max="4.5"
-                      step="0.1"
-                      value={minSieveScore}
-                      onChange={(e) => setMinSieveScore(parseFloat(e.target.value))}
-                      style={{ cursor: 'pointer', accentColor: 'var(--accent-primary)', width: '100px' }}
-                    />
-                  </div>
-                  <label 
-                    style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: '0.35rem', 
-                      fontSize: '0.8rem', 
-                      color: 'var(--text-secondary)', 
-                      cursor: 'pointer', 
-                      borderLeft: '1px solid var(--border-color)', 
-                      paddingLeft: '0.75rem' 
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      id="checkbox-include-unrated-sieved"
-                      checked={includeUnrated}
-                      onChange={(e) => setIncludeUnrated(e.target.checked)}
-                      style={{ accentColor: 'var(--accent-primary)', cursor: 'pointer' }}
-                    />
-                    Include Unrated
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            {/* Results Grid */}
-            {sievedOutShows.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">✨</div>
-                <h3>No Sieved Out Titles</h3>
-                <p>No titles in this filter subset fell below your minimum sieve threshold of {minSieveScore}/5.</p>
-                <button 
-                  className="btn btn-primary" 
-                  onClick={() => {
-                    setSearchTerm('');
-                    setSelectedLanguage('All');
-                    setSelectedPlatform('All');
-                    setMinSieveScore(3.0);
-                    setIncludeUnrated(true);
-                  }}
-                  style={{ marginTop: '1.25rem' }}
-                >
-                  Reset All Filters
-                </button>
-              </div>
-            ) : (
-              <div className="shows-grid">
-                {sievedOutShows.map(show => (
-                  <ShowCard
-                    key={show.id}
-                    show={show}
-                    isInWatchlist={watchlist.some(item => item.id === show.id)}
-                    onToggleWatchlist={handleToggleWatchlist}
-                    onDeleteShow={handleDeleteShow}
-                    onRefreshShowRatings={handleRefreshShowRatings}
-                    reviewers={reviewers}
-                    minSieveScore={minSieveScore}
-                    includeUnrated={includeUnrated}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* VIEW 2: DECIDER WHEEL */}
-        {activeTab === 'wheel' && (
-          <DeciderWheel 
-            matchingShows={sievedShows}
-            onToggleWatchlist={handleToggleWatchlist}
-            watchlist={watchlist}
-          />
-        )}
-
-        {/* VIEW 3: DISCOVER */}
-        {activeTab === 'tracker' && (
-          <OttTracker 
-            shows={shows}
-            watchlist={watchlist}
-            onToggleWatchlist={handleToggleWatchlist}
-            reviewers={reviewers}
-            onImportNewShows={handleImportNewShows}
-            mediaType={activeMediaType}
-          />
-        )}
-
-        {activeTab === 'sieve_india' && (
-          <SieveIndia
-            shows={shows}
-            reviewers={reviewers}
-            onImportNewShows={handleImportNewShows}
-          />
-        )}
-
-        {/* VIEW 4: WATCHLIST & LOG */}
-        {activeTab === 'watchlist' && (
-          <Watchlist 
-            watchlist={watchlist}
-            onRemoveFromWatchlist={handleRemoveFromWatchlist}
-            watchedHistory={watchedHistory}
-            onAddToHistory={handleAddToHistory}
-            onRemoveFromHistory={handleRemoveFromHistory}
-            onUpdateWatchlistShow={handleUpdateWatchlistShow}
-            mediaType={activeMediaType}
-          />
-        )}
-
-        {/* VIEW 5: SETTINGS */}
-        {activeTab === 'settings' && (
-          <Settings 
-            shows={shows}
-            reviewers={reviewers}
-            onAddReviewer={handleAddReviewer}
-            onDeleteReviewer={handleDeleteReviewer}
-            onUpdateReviewer={handleUpdateReviewer}
-            onDeleteShow={handleDeleteShow}
-            onRefreshShowRatings={handleRefreshShowRatings}
-            onResetAllData={handleResetAllData}
-            onImportData={handleImportData}
-            exportDataJSON={handleExportDataJSON}
-            theme={theme}
-            onThemeChange={setTheme}
-            dataFolder={dataFolder}
-            onUpdateDataFolder={handleUpdateDataFolder}
-          />
+          </>
         )}
       </main>
 
       {/* ADD TITLE MODAL */}
-      <AddTitleModal 
+      <AddTitleModal
         isOpen={showAddTitleModal}
         onClose={() => setShowAddTitleModal(false)}
         onAddShow={handleAddShow}
@@ -1335,8 +1003,8 @@ export default function App() {
                 <button className="btn btn-secondary" onClick={() => setShowToDelete(null)}>
                   Cancel
                 </button>
-                <button 
-                  className="btn btn-primary" 
+                <button
+                  className="btn btn-primary"
                   onClick={handleConfirmDelete}
                   style={{ backgroundColor: '#ef4444', borderColor: '#ef4444', backgroundImage: 'none' }}
                 >
@@ -1347,16 +1015,6 @@ export default function App() {
           </div>
         </div>
       )}
-
-      {/* TOAST SYSTEM */}
-      <div className="toast-container">
-        {toasts.map(t => (
-          <div key={t.id} className={`toast ${t.type === 'error' ? 'toast-error' : 'toast-success'}`}>
-            <span>{t.type === 'error' ? '⚠️' : '✨'}</span>
-            <span>{t.message}</span>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
