@@ -8,6 +8,7 @@ import OttTracker from './components/OttTracker';
 import Watchlist from './components/Watchlist';
 import Settings from './components/Settings';
 import AddTitleModal from './components/AddTitleModal';
+import SieveIndia from './components/SieveIndia';
 
 const migrateReviewers = (reviewersList) => {
   if (!Array.isArray(reviewersList)) return reviewersList;
@@ -185,11 +186,25 @@ export default function App() {
     }
   };
   // Navigation tab
-  const [activeTab, setActiveTab] = useState('recommendations'); // recommendations | wheel | tracker | watchlist | settings
+  const [activeTab, setActiveTab] = useState('recommendations'); // recommendations | sieved_out | wheel | tracker | sieve_india | watchlist | settings
+
+  // Media Mode State: 'movie' | 'tv' (persisted in localStorage and synchronizes entire application)
+  const [activeMediaType, setActiveMediaType] = useState(() => {
+    try {
+      return localStorage.getItem('flicksieve_active_media_type') || 'movie';
+    } catch (e) {
+      return 'movie';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('flicksieve_active_media_type', activeMediaType);
+    } catch (e) {}
+  }, [activeMediaType]);
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedType, setSelectedType] = useState('all'); // all | movie | tv
   const [selectedLanguage, setSelectedLanguage] = useState('All'); // All | Tamil | English | Malayalam | Hindi | Other
   const [selectedPlatform, setSelectedPlatform] = useState('All'); // All | platform_name
   const [minSieveScore, setMinSieveScore] = useState(3.0); // Filter out shows <= 3.0 out of 5
@@ -229,6 +244,10 @@ export default function App() {
     setWatchlist(prev => prev.filter(item => item.id !== showId));
   };
 
+  const handleUpdateWatchlistShow = (updatedShow) => {
+    setWatchlist(prev => prev.map(item => item.id === updatedShow.id ? updatedShow : item));
+  };
+
   const handleAddToHistory = (logEntry) => {
     setWatchedHistory(prev => [logEntry, ...prev]);
     triggerToast(`Logged "${logEntry.title}" into watched history!`);
@@ -263,11 +282,17 @@ export default function App() {
       if (show.ratings.imdb) { total += show.ratings.imdb / 2; count++; }
       if (show.ratings.rottenTomatoesAudience) { total += show.ratings.rottenTomatoesAudience / 20; count++; }
       if (show.ratings.letterboxd) { total += show.ratings.letterboxd; count++; }
+      else if (show.type === 'tv' && show.ratings.rottenTomatoes) { total += show.ratings.rottenTomatoes / 20; count++; }
       return count > 0 ? (total / count) : 0;
     };
 
     const score = calculateScore(newShow);
     setShows(prev => [newShow, ...prev]);
+
+    // If user added a show matching or not matching activeMediaType, switch mode so it's immediately visible
+    if (newShow.type && newShow.type !== activeMediaType) {
+      setActiveMediaType(newShow.type);
+    }
     
     if (score <= minSieveScore) {
       triggerToast(`Added "${newShow.title}". Note: Rating is ${score.toFixed(1)}/5, it will be sieved (filtered) from your active recommendations!`, 'error');
@@ -303,12 +328,15 @@ export default function App() {
       let currentYear = show.year;
       let currentSlug = show.letterboxdSlug || null;
       let currentRtUrl = show.rottenTomatoesUrl || null;
+      let currentSeasons = show.seasons || null;
+      let currentTotalSeasons = show.totalSeasons || null;
+      const isTv = show.type === 'tv';
 
       // Run all 3 rating lookups concurrently in parallel
       const [imdbResult, lbResult, rtResult] = await Promise.allSettled([
         fetchImdbDetails(currentImdbId, show.title, currentYear),
-        fetchLetterboxd(show.title, currentYear, currentImdbId),
-        fetchRottenTomatoes(show.title, currentYear, show.type === 'tv')
+        fetchLetterboxd(show.title, currentYear, currentImdbId, isTv),
+        fetchRottenTomatoes(show.title, currentYear, isTv)
       ]);
 
       // 1. Process IMDb details
@@ -329,6 +357,9 @@ export default function App() {
         }
         if (imdbData.year && !currentYear) {
           currentYear = imdbData.year;
+        }
+        if (imdbData.totalSeasons && !currentTotalSeasons) {
+          currentTotalSeasons = parseInt(imdbData.totalSeasons, 10);
         }
       }
 
@@ -367,9 +398,15 @@ export default function App() {
         if (rtData.url) {
           currentRtUrl = rtData.url;
         }
+        if (rtData.seasons && rtData.seasons.length > 0) {
+          currentSeasons = rtData.seasons;
+          if (!currentTotalSeasons) {
+            currentTotalSeasons = rtData.seasons.length;
+          }
+        }
       }
 
-      // 3. Update state
+      // 4. Update state
       setShows(prev => prev.map(s => {
         if (s.id === showId) {
           return {
@@ -381,7 +418,9 @@ export default function App() {
             year: currentYear,
             posterUrl: currentPosterUrl,
             letterboxdSlug: currentSlug,
-            rottenTomatoesUrl: currentRtUrl
+            rottenTomatoesUrl: currentRtUrl,
+            seasons: currentSeasons,
+            totalSeasons: currentTotalSeasons
           };
         }
         return s;
@@ -419,6 +458,8 @@ export default function App() {
       let currentOverview = importedShow.overview || '';
       let currentGenres = importedShow.genres || [];
       let currentYear = importedShow.year || null;
+      const isTv = importedShow.type === 'tv';
+      let currentTotalSeasons = importedShow.totalSeasons || null;
 
       // Fetch IMDb details & rating
       try {
@@ -430,6 +471,7 @@ export default function App() {
           if (imdbData.posterUrl) currentPosterUrl = imdbData.posterUrl;
           if (imdbData.genres && imdbData.genres.length > 0) currentGenres = imdbData.genres;
           if (imdbData.year) currentYear = imdbData.year;
+          if (imdbData.totalSeasons && !currentTotalSeasons) currentTotalSeasons = parseInt(imdbData.totalSeasons, 10);
         }
       } catch (e) {
         console.error(`Error background-resolving IMDb for ${importedShow.title}:`, e);
@@ -441,7 +483,7 @@ export default function App() {
       let lbPoster = null;
 
       try {
-        const lbData = await fetchLetterboxd(importedShow.title, currentYear, currentImdbId);
+        const lbData = await fetchLetterboxd(importedShow.title, currentYear, currentImdbId, isTv);
         if (lbData && !lbData.error) {
           lbRating = lbData.rating ? parseFloat(lbData.rating) : null;
           lbSlug = lbData.slug || null;
@@ -451,7 +493,28 @@ export default function App() {
         console.error(`Error background-resolving Letterboxd for ${importedShow.title}:`, err);
       }
 
-      // Merge resolved details (both IMDb and Letterboxd) back into state
+      // Fetch Rotten Tomatoes details (including seasons if TV)
+      let rtCritic = importedShow.ratings?.rottenTomatoes || null;
+      let rtAudience = importedShow.ratings?.rottenTomatoesAudience || null;
+      let rtUrl = importedShow.rottenTomatoesUrl || null;
+      let rtSeasons = importedShow.seasons || null;
+
+      try {
+        const rtData = await fetchRottenTomatoes(importedShow.title, currentYear, isTv);
+        if (rtData && !rtData.error) {
+          if (rtData.criticScore !== undefined && rtData.criticScore !== null) rtCritic = parseInt(rtData.criticScore, 10);
+          if (rtData.audienceScore !== undefined && rtData.audienceScore !== null) rtAudience = parseInt(rtData.audienceScore, 10);
+          if (rtData.url) rtUrl = rtData.url;
+          if (rtData.seasons && rtData.seasons.length > 0) {
+            rtSeasons = rtData.seasons;
+            if (!currentTotalSeasons) currentTotalSeasons = rtData.seasons.length;
+          }
+        }
+      } catch (err) {
+        console.error(`Error background-resolving RT for ${importedShow.title}:`, err);
+      }
+
+      // Merge resolved details back into state
       setShows(prev => prev.map(s => {
         if (s.id === importedShow.id) {
           return {
@@ -461,12 +524,17 @@ export default function App() {
             overview: currentOverview || s.overview,
             genres: currentGenres.length > 0 ? currentGenres : s.genres,
             year: currentYear || s.year,
+            totalSeasons: currentTotalSeasons || s.totalSeasons || null,
+            seasons: rtSeasons || s.seasons || null,
             ratings: {
               ...s.ratings,
               imdb: currentImdbRating || s.ratings.imdb,
-              letterboxd: lbRating || s.ratings.letterboxd
+              letterboxd: lbRating || s.ratings.letterboxd,
+              rottenTomatoes: rtCritic !== null ? rtCritic : s.ratings.rottenTomatoes,
+              rottenTomatoesAudience: rtAudience !== null ? rtAudience : s.ratings.rottenTomatoesAudience
             },
-            letterboxdSlug: lbSlug || s.letterboxdSlug || null
+            letterboxdSlug: lbSlug || s.letterboxdSlug || null,
+            rottenTomatoesUrl: rtUrl || s.rottenTomatoesUrl || null
           };
         }
         return s;
@@ -514,21 +582,29 @@ export default function App() {
     if (show.ratings.letterboxd !== undefined && show.ratings.letterboxd !== null) {
       total += show.ratings.letterboxd;
       count++;
+    } else if (show.type === 'tv' && show.ratings.rottenTomatoes !== undefined && show.ratings.rottenTomatoes !== null) {
+      total += show.ratings.rottenTomatoes / 20;
+      count++;
     }
     return count > 0 ? total / count : 0;
   };
 
-  // Total shows in DB
-  const totalShowsInDb = shows.length;
+  // Filter shows by active media mode (movie vs tv)
+  const currentMediaShows = React.useMemo(() => {
+    return shows.filter(s => (s.type || 'movie') === activeMediaType);
+  }, [shows, activeMediaType]);
+
+  // Total shows in DB for current media type
+  const totalShowsInDb = currentMediaShows.length;
 
   // Perform Sieving
   const sievedShows = React.useMemo(() => {
-    return shows.filter(show => {
+    return currentMediaShows.filter(show => {
       // 1. Sieve threshold check: Must be greater than minimum threshold (e.g. 3.0/5)
       // If the user is explicitly searching for a title, bypass the sieve score threshold
       const titleMatchesSearch = searchTerm && show.title.toLowerCase().includes(searchTerm.toLowerCase());
       const score = calculateShowScore(show);
-      const isUnrated = show.ratings.imdb === null && show.ratings.rottenTomatoes === null && show.ratings.letterboxd === null;
+      const isUnrated = show.ratings.imdb === null && show.ratings.rottenTomatoes === null && show.ratings.letterboxd === null && show.ratings.rottenTomatoesAudience === null;
       
       if (!titleMatchesSearch) {
         if (isUnrated) {
@@ -544,17 +620,12 @@ export default function App() {
         return false;
       }
 
-      // 3. Media Type (Movie/Series)
-      if (selectedType !== 'all' && show.type !== selectedType) {
-        return false;
-      }
-
-      // 4. Platform
+      // 3. Platform
       if (selectedPlatform !== 'All' && show.platform !== selectedPlatform) {
         return false;
       }
 
-      // 5. Language
+      // 4. Language
       if (selectedLanguage !== 'All') {
         if (selectedLanguage === 'Other') {
           // If language is not one of the main ones
@@ -566,16 +637,16 @@ export default function App() {
 
       return true;
     });
-  }, [shows, searchTerm, selectedType, selectedLanguage, selectedPlatform, minSieveScore, includeUnrated]);
+  }, [currentMediaShows, searchTerm, selectedLanguage, selectedPlatform, minSieveScore, includeUnrated]);
 
   // Perform Sieving for Sieved Out Shows
   const sievedOutShows = React.useMemo(() => {
-    return shows.filter(show => {
+    return currentMediaShows.filter(show => {
       // 1. Sieve threshold check: Must be LESS than or equal to minimum threshold (e.g. 3.0/5)
       // or unrated if includeUnrated is false.
       const titleMatchesSearch = searchTerm && show.title.toLowerCase().includes(searchTerm.toLowerCase());
       const score = calculateShowScore(show);
-      const isUnrated = show.ratings.imdb === null && show.ratings.rottenTomatoes === null && show.ratings.letterboxd === null;
+      const isUnrated = show.ratings.imdb === null && show.ratings.rottenTomatoes === null && show.ratings.letterboxd === null && show.ratings.rottenTomatoesAudience === null;
       
       let isSievedOut = false;
       if (!titleMatchesSearch) {
@@ -594,17 +665,12 @@ export default function App() {
         return false;
       }
 
-      // 3. Media Type (Movie/Series)
-      if (selectedType !== 'all' && show.type !== selectedType) {
-        return false;
-      }
-
-      // 4. Platform
+      // 3. Platform
       if (selectedPlatform !== 'All' && show.platform !== selectedPlatform) {
         return false;
       }
 
-      // 5. Language
+      // 4. Language
       if (selectedLanguage !== 'All') {
         if (selectedLanguage === 'Other') {
           return !['tamil', 'english', 'malayalam', 'hindi'].includes(show.language.toLowerCase());
@@ -615,26 +681,26 @@ export default function App() {
 
       return true;
     });
-  }, [shows, searchTerm, selectedType, selectedLanguage, selectedPlatform, minSieveScore, includeUnrated]);
+  }, [currentMediaShows, searchTerm, selectedLanguage, selectedPlatform, minSieveScore, includeUnrated]);
 
   // Compute how many got sieved out due to rating threshold alone
   const sievedOutCount = React.useMemo(() => {
-    return shows.filter(show => {
+    return currentMediaShows.filter(show => {
       const score = calculateShowScore(show);
-      const isUnrated = show.ratings.imdb === null && show.ratings.rottenTomatoes === null && show.ratings.letterboxd === null;
+      const isUnrated = show.ratings.imdb === null && show.ratings.rottenTomatoes === null && show.ratings.letterboxd === null && show.ratings.rottenTomatoesAudience === null;
       if (includeUnrated && isUnrated) return false;
       return score <= minSieveScore;
     }).length;
-  }, [shows, minSieveScore, includeUnrated]);
+  }, [currentMediaShows, minSieveScore, includeUnrated]);
 
   // Extract unique platforms for select dropdown
   const uniquePlatforms = React.useMemo(() => {
     const list = new Set();
-    shows.forEach(s => {
+    currentMediaShows.forEach(s => {
       if (s.platform) list.add(s.platform);
     });
     return Array.from(list);
-  }, [shows]);
+  }, [currentMediaShows]);
 
   return (
     <div className="app-container">
@@ -644,6 +710,28 @@ export default function App() {
           <span className="logo-icon">🍿</span>
           <span className="logo-text">FlickSieve</span>
         </a>
+
+        {/* Media Mode Switcher */}
+        <div className="media-mode-switcher">
+          <button 
+            id="media-mode-movie-btn"
+            className={`media-mode-btn ${activeMediaType === 'movie' ? 'active' : ''}`}
+            onClick={() => setActiveMediaType('movie')}
+            type="button"
+          >
+            <span className="media-mode-btn-icon">🎬</span>
+            <span>Movies</span>
+          </button>
+          <button 
+            id="media-mode-tv-btn"
+            className={`media-mode-btn ${activeMediaType === 'tv' ? 'active' : ''}`}
+            onClick={() => setActiveMediaType('tv')}
+            type="button"
+          >
+            <span className="media-mode-btn-icon">📺</span>
+            <span>TV Shows</span>
+          </button>
+        </div>
 
         <nav>
           <ul className="nav-menu">
@@ -684,7 +772,16 @@ export default function App() {
                 onClick={() => setActiveTab('tracker')}
               >
                 <Calendar />
-                OTT Tracker
+                Discover
+              </button>
+            </li>
+            <li>
+              <button
+                id="nav-btn-sieve-india"
+                className={`nav-item ${activeTab === 'sieve_india' ? 'active' : ''}`}
+                onClick={() => setActiveTab('sieve_india')}
+              >
+                Sieve India
               </button>
             </li>
             <li>
@@ -750,42 +847,56 @@ export default function App() {
           <div className="header-title-container">
             {activeTab === 'recommendations' && (
               <>
-                <h1>Sieved Recommendations</h1>
+                <h1>{activeMediaType === 'tv' ? 'Sieved TV Recommendations' : 'Sieved Movie Recommendations'}</h1>
                 <p className="header-subtitle">
-                  Aggregating IMDb, Rotten Tomatoes, and Letterboxd. Only ratings &gt; {minSieveScore}/5 shown.
+                  {activeMediaType === 'tv' 
+                    ? `Aggregating IMDb, RT Audience, and RT Critics (with season breakdown). Only ratings > ${minSieveScore}/5 shown.`
+                    : `Aggregating IMDb, Rotten Tomatoes, and Letterboxd. Only ratings > ${minSieveScore}/5 shown.`}
                 </p>
               </>
             )}
             {activeTab === 'sieved_out' && (
               <>
-                <h1>Sieved Out Titles</h1>
+                <h1>{activeMediaType === 'tv' ? 'Sieved Out TV Shows' : 'Sieved Out Movies'}</h1>
                 <p className="header-subtitle">
-                  Titles with average ratings below your sieve limit ({minSieveScore}/5) or unrated titles.
+                  {activeMediaType === 'tv' ? 'TV shows' : 'Movies'} with average ratings below your sieve limit ({minSieveScore}/5) or unrated titles.
                 </p>
               </>
             )}
             {activeTab === 'wheel' && (
               <>
                 <h1>Decision Paralysis Solver</h1>
-                <p className="header-subtitle">Can't decide what to watch? Let the FlickSieve wheel do it.</p>
+                <p className="header-subtitle">
+                  {activeMediaType === 'tv' 
+                    ? "Can't decide which TV series to binge next? Let the FlickSieve wheel do it." 
+                    : "Can't decide what movie to watch? Let the FlickSieve wheel do it."}
+                </p>
               </>
             )}
             {activeTab === 'tracker' && (
               <>
-                <h1>OTT Release Calendar</h1>
-                <p className="header-subtitle">Weekly digital premieres and streaming updates.</p>
+                <h1>Discover</h1>
+                <p className="header-subtitle">
+                  {activeMediaType === 'tv'
+                    ? 'Weekly streaming season premieres and popular new TV series.'
+                    : 'Weekly digital premieres and streaming updates.'}
+                </p>
               </>
             )}
             {activeTab === 'watchlist' && (
               <>
                 <h1>Your Watch Queue</h1>
-                <p className="header-subtitle">Keep track of what to watch and write logs for completed titles.</p>
+                <p className="header-subtitle">
+                  {activeMediaType === 'tv'
+                    ? 'Track episode & season progress and log completed series or seasons.'
+                    : 'Keep track of what to watch and write logs for completed titles.'}
+                </p>
               </>
             )}
             {activeTab === 'settings' && (
               <>
                 <h1>Application Configuration</h1>
-                <p className="header-subtitle">Customize YouTube reviewers, add titles, and export backups.</p>
+                <p className="header-subtitle">Customize YouTube reviewers, manage database titles, and export backups.</p>
               </>
             )}
           </div>
@@ -798,7 +909,9 @@ export default function App() {
               style={{ padding: '0.5rem 1rem', display: 'flex', flexDirection: 'row', gap: '0.75rem', alignItems: 'center' }}
             >
               <div style={{ textAlign: 'left' }}>
-                <span className="rating-source-label" style={{ fontSize: '0.6rem' }}>Total in DB</span>
+                <span className="rating-source-label" style={{ fontSize: '0.6rem' }}>
+                  {activeMediaType === 'tv' ? 'TV in DB' : 'Movies in DB'}
+                </span>
                 <span className="rating-value" style={{ fontSize: '1.1rem' }}>{totalShowsInDb}</span>
               </div>
             </div>
@@ -835,17 +948,6 @@ export default function App() {
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-
-                <select
-                  id="filter-type"
-                  className="filter-select"
-                  value={selectedType}
-                  onChange={(e) => setSelectedType(e.target.value)}
-                >
-                  <option value="all">All Formats</option>
-                  <option value="movie">Movies Only</option>
-                  <option value="tv">TV Shows Only</option>
-                </select>
 
                 <select
                   id="filter-platform"
@@ -956,7 +1058,6 @@ export default function App() {
                   className="btn btn-primary" 
                   onClick={() => {
                     setSearchTerm('');
-                    setSelectedType('all');
                     setSelectedLanguage('All');
                     setSelectedPlatform('All');
                     setMinSieveScore(3.0);
@@ -1005,17 +1106,6 @@ export default function App() {
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-
-                <select
-                  id="filter-type-sieved"
-                  className="filter-select"
-                  value={selectedType}
-                  onChange={(e) => setSelectedType(e.target.value)}
-                >
-                  <option value="all">All Formats</option>
-                  <option value="movie">Movies Only</option>
-                  <option value="tv">TV Shows Only</option>
-                </select>
 
                 <select
                   id="filter-platform-sieved"
@@ -1126,7 +1216,6 @@ export default function App() {
                   className="btn btn-primary" 
                   onClick={() => {
                     setSearchTerm('');
-                    setSelectedType('all');
                     setSelectedLanguage('All');
                     setSelectedPlatform('All');
                     setMinSieveScore(3.0);
@@ -1166,12 +1255,21 @@ export default function App() {
           />
         )}
 
-        {/* VIEW 3: OTT TRACKER */}
+        {/* VIEW 3: DISCOVER */}
         {activeTab === 'tracker' && (
           <OttTracker 
             shows={shows}
             watchlist={watchlist}
             onToggleWatchlist={handleToggleWatchlist}
+            reviewers={reviewers}
+            onImportNewShows={handleImportNewShows}
+            mediaType={activeMediaType}
+          />
+        )}
+
+        {activeTab === 'sieve_india' && (
+          <SieveIndia
+            shows={shows}
             reviewers={reviewers}
             onImportNewShows={handleImportNewShows}
           />
@@ -1185,6 +1283,8 @@ export default function App() {
             watchedHistory={watchedHistory}
             onAddToHistory={handleAddToHistory}
             onRemoveFromHistory={handleRemoveFromHistory}
+            onUpdateWatchlistShow={handleUpdateWatchlistShow}
+            mediaType={activeMediaType}
           />
         )}
 
@@ -1214,6 +1314,7 @@ export default function App() {
         isOpen={showAddTitleModal}
         onClose={() => setShowAddTitleModal(false)}
         onAddShow={handleAddShow}
+        defaultType={activeMediaType}
       />
 
       {/* DELETE TITLE CONFIRMATION MODAL */}
