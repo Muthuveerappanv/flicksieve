@@ -6,18 +6,20 @@ export const isTauri = () => typeof window !== 'undefined' && !!window.__TAURI_I
 /**
  * Fetches Letterboxd rating details.
  */
-export async function fetchLetterboxd(title, year = '', imdbId = '') {
+export async function fetchLetterboxd(title, year = '', imdbId = '', isTv = false) {
   if (isTauri()) {
     const resultJson = await invoke('run_letterboxd_scraper', {
       query: title,
       year: year ? String(year) : 'None',
       imdbId: imdbId ? String(imdbId) : 'None',
+      isTv,
     });
     return JSON.parse(resultJson);
   } else {
     const yearParam = year ? `&year=${year}` : '';
     const imdbParam = imdbId ? `&imdb_id=${imdbId}` : '';
-    const res = await fetch(`/api/letterboxd?query=${encodeURIComponent(title)}` + yearParam + imdbParam);
+    const isTvParam = `&is_tv=${isTv ? 'true' : 'false'}`;
+    const res = await fetch(`/api/letterboxd?query=${encodeURIComponent(title)}` + yearParam + imdbParam + isTvParam);
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     return await res.json();
   }
@@ -41,6 +43,69 @@ export async function fetchRottenTomatoes(title, year = '', isTv = false) {
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     return await res.json();
   }
+}
+
+/**
+ * Discovers new titles from Rotten Tomatoes with a strong audience score.
+ * Crawls RT's "Movies at Home" or "TV Series" listing back `days` days and keeps titles with
+ * audience score >= `minAudience`. Returns { count, windowDays, minAudience, pagesCrawled, movies: [...], shows: [...] }.
+ */
+export async function fetchDiscoverAtHome(days = 90, minAudience = 70, sort = 'audience', mediaType = 'movie') {
+  const sortParam = sort === 'date' ? 'date' : 'audience';
+  if (isTauri()) {
+    const resultJson = await invoke('run_discover_at_home', {
+      days: String(days),
+      minAudience: minAudience ? String(minAudience) : 'None',
+      sort: sortParam,
+      mediaType,
+    });
+    return JSON.parse(resultJson);
+  } else {
+    const params = new URLSearchParams();
+    params.set('days', days);
+    if (minAudience) params.set('min_audience', minAudience);
+    params.set('sort', sortParam);
+    params.set('media_type', mediaType);
+    const res = await fetch(`/api/discover-at-home?${params.toString()}`);
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    return await res.json();
+  }
+}
+
+/**
+ * Discovers Indian films from the reviewers the user trusts.
+ *
+ * Ranking is driven by how many trusted critics reviewed a film -- NOT by
+ * IMDb or Letterboxd scores, which are fetched for display only. A measured
+ * 38% of films covered by trusted reviewers have no Letterboxd entry, so
+ * those ratings must never filter results.
+ *
+ * Returns { count, reviewersUsed, failedReviewers, films: [...] }.
+ */
+export async function fetchDiscoverIndian({
+  handles = [],
+  maxAgeDays = 60,
+  minReviewers = 1,
+} = {}) {
+  const handleParam = Array.isArray(handles) ? handles.join(',') : String(handles || '');
+
+  if (isTauri()) {
+    const resultJson = await invoke('run_discover_indian', {
+      handles: handleParam,
+      maxAgeDays: String(maxAgeDays),
+      minReviewers: String(minReviewers),
+    });
+    return JSON.parse(resultJson);
+  }
+
+  const params = new URLSearchParams({
+    handles: handleParam,
+    max_age_days: String(maxAgeDays),
+    min_reviewers: String(minReviewers),
+  });
+  const res = await fetch(`/api/discover-indian?${params.toString()}`);
+  if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+  return await res.json();
 }
 
 /**
@@ -83,6 +148,9 @@ function formatOmdbData(data, resolvedImdbId, title, year) {
   return {
     imdbId: data.imdbID || resolvedImdbId || null,
     title: data.Title || title,
+    type: data.Type === 'series' ? 'tv' : 'movie',
+    totalSeasons: data.totalSeasons ? parseInt(data.totalSeasons, 10) : null,
+    yearSpan: data.Year || null,
     year: data.Year ? parseInt(data.Year, 10) : (year ? parseInt(year, 10) : null),
     rating: ratingNum,
     overview: data.Plot && data.Plot !== 'N/A' ? data.Plot : '',
@@ -200,6 +268,9 @@ export async function fetchImdbDetails(imdbId, title = '', year = '', apiKey = '
     const finalResult = omdbData || {
       imdbId: resolvedImdbId,
       title,
+      type: 'movie',
+      totalSeasons: null,
+      yearSpan: null,
       year: year ? parseInt(year, 10) : null,
       rating: null,
       overview: '',
