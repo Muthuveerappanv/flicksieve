@@ -111,7 +111,7 @@ W_RECENCY = 0.5
 
 
 # Qualifiers that sit between the film name and the word "review".
-_QUALIFIER = r"(?:Malayalam\s+|Tamil\s+|Telugu\s+|Hindi\s+|Kannada\s+)?(?:Version\s+)?(?:Movie\s+|Film\s+|Web\s+Series\s+|Series\s+)?"
+_QUALIFIER = r"(?:Malayalam\s+|Tamil\s+|Telugu\s+|Hindi\s+|Kannada\s+)?(?:Version\s+)?(?:The\s+|A\s+|An\s+)?(?:Movie\s+|Film\s+|Web\s+Series\s+|Series\s+)?"
 
 
 def film_title_from_review(video_title):
@@ -120,6 +120,7 @@ def film_title_from_review(video_title):
         return None
     head = re.split(rf"\s*{_QUALIFIER}Review\b", video_title, maxsplit=1, flags=re.I)[0]
     head = head.strip(" -|:\u2013\u2014")
+    head = re.sub(r"(?<=\S)\s+\b(?:the|a|an)\b$", "", head, flags=re.I).strip(" -|:\u2013\u2014")
     return head or None
 
 

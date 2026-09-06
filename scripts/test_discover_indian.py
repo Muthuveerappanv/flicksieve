@@ -44,6 +44,20 @@ class TestFilmTitleFromReview(unittest.TestCase):
             "Bethlehem Kudumba Unit",
         )
 
+    def test_strips_trailing_article_qualifier(self):
+        self.assertEqual(
+            di.film_title_from_review("Mirzapur The Movie Review: ..."),
+            "Mirzapur",
+        )
+        self.assertEqual(
+            di.film_title_from_review("DC Review - An engaging..."),
+            "DC",
+        )
+        self.assertEqual(
+            di.film_title_from_review("I'M GAME Review - ..."),
+            "I'M GAME",
+        )
+
     def test_handles_version_qualifier(self):
         self.assertEqual(
             di.film_title_from_review("IRUMUDI Tamil Version Review - Ravi Teja, GV Prakash"),
