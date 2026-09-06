@@ -316,6 +316,59 @@ def extract_star_rating(html):
     return None
 
 
+_JSONLD_RE = re.compile(
+    r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>', re.S | re.I
+)
+
+
+def _valid_star(value):
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return None
+    return num if 0 < num <= 5 else None
+
+
+def extract_review_rating(html):
+    r"""Pull a 0-5 critic star rating. Four strategies, strictest first.
+
+    NEVER use a bare r'(\d)/5' regex: it matches minified CSS such as
+    `grid-column:1/5` and silently reports 1.0 for every article.
+    """
+    if not html:
+        return None
+
+    # 1. JSON-LD, only inside a genuine review block.
+    for match in _JSONLD_RE.finditer(html):
+        blob = match.group(1)
+        if '"Review"' in blob or "reviewRating" in blob or "aggregateRating" in blob:
+            for candidate in re.findall(r'"ratingValue"\s*:\s*"?([\d.]+)"?', blob):
+                star = _valid_star(candidate)
+                if star is not None:
+                    return star
+
+    # 2. Bare "rating": N JSON key (Hindustan Times).
+    match = re.search(r'"rating"\s*:\s*"?([\d.]+)"?\s*[,}]', html)
+    if match:
+        star = _valid_star(match.group(1))
+        if star is not None:
+            return star
+
+    # 3. Microdata.
+    match = re.search(r'itemprop="ratingValue"[^>]*content="([\d.]+)"', html)
+    if match:
+        star = _valid_star(match.group(1))
+        if star is not None:
+            return star
+
+    # 4. Visible text, anchored to the word "Rating" (123Telugu).
+    match = re.search(r"Rating[^0-9]{0,24}([\d](?:\.\d+)?)\s*/\s*5", html, re.I)
+    if match:
+        return _valid_star(match.group(1))
+
+    return None
+
+
 def scrape_critics(max_articles=12):
     """Return critic reviews across all feeds. Never raises."""
     found = []

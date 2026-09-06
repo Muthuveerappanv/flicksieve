@@ -211,3 +211,26 @@ class TestCriticSites(unittest.TestCase):
     def test_window_presets(self):
         self.assertEqual(di.WINDOW_PRESETS["3m"], 90)
         self.assertEqual(di.WINDOW_PRESETS["6m"], 180)
+
+
+class TestReviewRating(unittest.TestCase):
+    def test_jsonld_review_rating(self):
+        html = '<script type="application/ld+json">{"@type":"Review","reviewRating":{"ratingValue":"3.5"}}</script>'
+        self.assertEqual(di.extract_review_rating(html), 3.5)
+
+    def test_json_rating_key(self):
+        self.assertEqual(di.extract_review_rating('{"rating": 4.0, "x": 1}'), 4.0)
+
+    def test_text_rating_near_the_word_rating(self):
+        self.assertEqual(di.extract_review_rating("<p>Rating: 2.75/5</p>"), 2.75)
+
+    def test_ignores_css_false_positive(self):
+        # THE bug that reported 1.0 for every Cinema Express article.
+        css = "<style>.hero{grid-column:1/5}.x{grid-row:2/5}</style>"
+        self.assertIsNone(di.extract_review_rating(css))
+
+    def test_rejects_out_of_range(self):
+        self.assertIsNone(di.extract_review_rating('{"rating": 7.5}'))
+
+    def test_returns_none_when_absent(self):
+        self.assertIsNone(di.extract_review_rating("<p>No score here at all.</p>"))
