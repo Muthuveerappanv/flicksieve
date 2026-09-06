@@ -276,3 +276,63 @@ def scrape_critics(max_articles=12):
     with ThreadPoolExecutor(max_workers=5) as pool:
         subset = list(pool.map(add_stars, subset))
     return subset + found[max_articles:]
+
+
+def reviewer_score(reviewer_count, total_views, critic_stars, age_days):
+    """Rank by trusted-reviewer consensus. Crowd ratings deliberately absent."""
+    reach = math.log10(total_views + 1) if total_views else 0.0
+    score = W_REVIEWER * reviewer_count + W_REACH * reach
+    if critic_stars:
+        score += W_CRITIC * (sum(critic_stars) / len(critic_stars)) * 2
+    if age_days:
+        score -= W_RECENCY * (age_days / 30.0)
+    return round(score, 3)
+
+
+def aggregate(youtube_reviews, critic_reviews, min_reviewers=1):
+    """Group reviews by film and rank by reviewer consensus."""
+    films = {}
+    for review in youtube_reviews:
+        key = review["filmKey"]
+        if not key:
+            continue
+        entry = films.setdefault(key, {
+            "film": review["film"], "filmKey": key,
+            "reviewers": {}, "criticReviews": [], "totalViews": 0, "ages": [],
+        })
+        entry["reviewers"].setdefault(review["reviewer"], []).append({
+            "url": review["url"], "views": review.get("views"),
+            "videoTitle": review.get("videoTitle"),
+        })
+        entry["totalViews"] += review.get("views") or 0
+        if review.get("ageDays") is not None:
+            entry["ages"].append(review["ageDays"])
+
+    for review in critic_reviews:
+        key = review["filmKey"]
+        if key in films:
+            films[key]["criticReviews"].append(review)
+
+    results = []
+    for entry in films.values():
+        if len(entry["reviewers"]) < min_reviewers:
+            continue
+        stars = [c["stars"] for c in entry["criticReviews"] if c.get("stars")]
+        age = min(entry["ages"]) if entry["ages"] else None
+        results.append({
+            "film": entry["film"],
+            "filmKey": entry["filmKey"],
+            "reviewerCount": len(entry["reviewers"]),
+            "reviewers": [
+                {"handle": handle, "reviews": items}
+                for handle, items in entry["reviewers"].items()
+            ],
+            "criticReviews": entry["criticReviews"],
+            "criticStars": round(sum(stars) / len(stars), 2) if stars else None,
+            "totalViews": entry["totalViews"],
+            "ageDays": age,
+            "score": reviewer_score(len(entry["reviewers"]), entry["totalViews"], stars, age),
+        })
+
+    results.sort(key=lambda r: -r["score"])
+    return results
