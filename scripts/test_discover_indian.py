@@ -234,3 +234,26 @@ class TestReviewRating(unittest.TestCase):
 
     def test_returns_none_when_absent(self):
         self.assertIsNone(di.extract_review_rating("<p>No score here at all.</p>"))
+
+
+class TestLanguageDetection(unittest.TestCase):
+    def test_from_url_path(self):
+        self.assertEqual(
+            di.detect_language("https://www.cinemaexpress.com/tamil/review/2026/Aug/07/dc-movie-review", "", None),
+            "Tamil",
+        )
+
+    def test_from_headline(self):
+        self.assertEqual(di.detect_language("https://x/y", "Telugu movie review: Ramba", None), "Telugu")
+
+    def test_outlet_default_is_the_fallback(self):
+        self.assertEqual(di.detect_language("https://x/y", "Some Film Review", "Hindi"), "Hindi")
+
+    def test_url_beats_outlet_default(self):
+        self.assertEqual(
+            di.detect_language("https://www.cinemaexpress.com/malayalam/review/x", "", "Hindi"),
+            "Malayalam",
+        )
+
+    def test_unknown_is_none_not_a_guess(self):
+        self.assertIsNone(di.detect_language("https://x/y", "A Film Review", None))

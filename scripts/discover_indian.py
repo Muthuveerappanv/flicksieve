@@ -369,6 +369,16 @@ def extract_review_rating(html):
     return None
 
 
+def detect_language(url, headline, outlet_default):
+    """URL path wins, then headline keywords, then the outlet's default."""
+    haystacks = [(url or "").lower(), (headline or "").lower()]
+    for text in haystacks:
+        for language, pattern in LANGUAGE_KEYWORDS.items():
+            if re.search(pattern, text):
+                return language
+    return outlet_default
+
+
 def scrape_critics(max_articles=12):
     """Return critic reviews across all feeds. Never raises."""
     found = []
