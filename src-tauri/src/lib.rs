@@ -26,13 +26,19 @@ fn resolve_paths(app: &tauri::AppHandle, script_name: &str) -> Result<(PathBuf, 
         }
     }
 
-    // 2.5 Try to check the absolute dev workspace path (useful when running the packaged app on the dev machine)
-    let dev_workspace_venv =
-        PathBuf::from("/Users/muthu/work/utilities/flicksieve/.venv/bin/python3");
-    let dev_workspace_script =
-        PathBuf::from("/Users/muthu/work/utilities/flicksieve/scripts").join(script_name);
-    if dev_workspace_venv.exists() && dev_workspace_script.exists() {
-        return Ok((dev_workspace_venv, dev_workspace_script));
+    // 2.5 Dev-only: fall back to the absolute dev workspace path so `tauri dev` /
+    // `cargo test` started from any directory still find the workspace venv. This
+    // tier is compiled out of release builds (`#[cfg(debug_assertions)]`) so a
+    // packaged .app never silently prefers the dev workspace over its own bundle.
+    #[cfg(debug_assertions)]
+    {
+        let dev_workspace_venv =
+            PathBuf::from("/Users/muthu/work/utilities/flicksieve/.venv/bin/python3");
+        let dev_workspace_script =
+            PathBuf::from("/Users/muthu/work/utilities/flicksieve/scripts").join(script_name);
+        if dev_workspace_venv.exists() && dev_workspace_script.exists() {
+            return Ok((dev_workspace_venv, dev_workspace_script));
+        }
     }
 
     // 3. Fallback: resource directory (bundled scripts for standalone packaged distribution)
