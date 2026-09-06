@@ -418,3 +418,67 @@ def enrich_film(film):
 def enrich_all(films, workers=5):
     with ThreadPoolExecutor(max_workers=workers) as pool:
         return list(pool.map(enrich_film, films))
+
+
+def load_handles():
+    """Read trusted YouTube handles from the user's reviewers.json."""
+    import os
+    path = os.path.join(os.path.dirname(__file__), "..", "src", "data", "reviewers.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return [r["youtubeHandle"] for r in json.load(fh)
+                    if r.get("youtubeHandle") and r.get("trusted", True)]
+    except Exception:
+        return ["@TamilTalkies", "@Filmicraft", "@unnivlogs"]
+
+
+def discover(handles=None, max_age_days=60, min_reviewers=1, enrich=True):
+    handles = handles or load_handles()
+    youtube_reviews, failed = [], []
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        for handle, reviews in zip(handles, pool.map(
+                lambda h: scrape_channel(h, max_age_days), handles)):
+            if reviews:
+                youtube_reviews.extend(reviews)
+            else:
+                failed.append(handle)
+
+    try:
+        critic_reviews = scrape_critics()
+    except Exception:
+        critic_reviews = []
+
+    films = aggregate(youtube_reviews, critic_reviews, min_reviewers=min_reviewers)
+    if enrich:
+        films = enrich_all(films)
+
+    return {
+        "count": len(films),
+        "reviewersUsed": handles,
+        "failedReviewers": failed,
+        "youtubeReviewCount": len(youtube_reviews),
+        "criticReviewCount": len(critic_reviews),
+        "maxAgeDays": max_age_days,
+        "films": films,
+    }
+
+
+def _arg(index, default):
+    if len(sys.argv) > index and sys.argv[index] not in ("", "None"):
+        return sys.argv[index]
+    return default
+
+
+if __name__ == "__main__":
+    try:
+        raw = _arg(1, "")
+        payload = discover(
+            handles=[h.strip() for h in raw.split(",") if h.strip()] or None,
+            max_age_days=int(_arg(2, "60")),
+            min_reviewers=int(_arg(3, "1")),
+        )
+        print(json.dumps(payload))
+    except Exception as exc:  # noqa: BLE001 - always emit JSON
+        print(json.dumps({"error": str(exc)}))
+        sys.exit(1)
