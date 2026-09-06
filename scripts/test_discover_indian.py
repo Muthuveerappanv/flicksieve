@@ -63,3 +63,45 @@ class TestMetadataParsing(unittest.TestCase):
         self.assertEqual(di.parse_relative_date("3 months ago"), 90)
         self.assertEqual(di.parse_relative_date("2 years ago"), 730)
         self.assertIsNone(di.parse_relative_date("416K views"))
+
+
+LOCKUP_FIXTURE = {
+    "contents": [{
+        "lockupViewModel": {
+            "contentId": "WDyUmuUxo8o",
+            "metadata": {"lockupMetadataViewModel": {
+                "title": {"content": "IMMORTAL Review - GV Prakash Kumar"},
+                "metadata": {"contentMetadataViewModel": {"metadataRows": [
+                    {"metadataParts": [{"text": {"content": "416K views"}},
+                                       {"text": {"content": "1 day ago"}}]}
+                ]}},
+            }},
+        }
+    }]
+}
+
+
+class TestHarvest(unittest.TestCase):
+    def test_reads_lockup_view_model(self):
+        got = di.harvest_videos(LOCKUP_FIXTURE)
+        self.assertEqual(len(got), 1)
+        self.assertEqual(got[0]["videoId"], "WDyUmuUxo8o")
+        self.assertIn("416K views", got[0]["meta"])
+
+    def test_reads_legacy_video_renderer(self):
+        legacy = {"videoRenderer": {
+            "videoId": "abc12345678",
+            "title": {"runs": [{"text": "TOXIC Review"}]},
+            "viewCountText": {"simpleText": "1.5M views"},
+            "publishedTimeText": {"simpleText": "10 days ago"},
+        }}
+        got = di.harvest_videos(legacy)
+        self.assertEqual(got[0]["videoId"], "abc12345678")
+
+    def test_extract_initial_data_handles_nonce_script(self):
+        html = '<script nonce="x">window["ytInitialData"] = {"a":{"b":1}};</script>'
+        self.assertEqual(di.extract_initial_data(html), {"a": {"b": 1}})
+
+    def test_extract_initial_data_ignores_braces_inside_strings(self):
+        html = '<script>ytInitialData = {"t":"a}b","n":2};</script>'
+        self.assertEqual(di.extract_initial_data(html), {"t": "a}b", "n": 2})

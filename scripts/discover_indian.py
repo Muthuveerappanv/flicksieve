@@ -88,3 +88,133 @@ def parse_relative_date(text):
     if not m:
         return None
     return int(m.group(1)) * _UNIT_DAYS[m.group(2).lower()]
+
+
+def _fetch(url, timeout=30, retries=3):
+    for attempt in range(retries):
+        try:
+            r = creq.get(url, impersonate=IMPERSONATE, timeout=timeout, headers=REQUEST_HEADERS)
+            if r.status_code == 200:
+                return r.text
+        except Exception:
+            pass
+        if attempt < retries - 1:
+            time.sleep(0.8 * (attempt + 1))
+    return None
+
+
+def extract_initial_data(html):
+    """Pull ytInitialData out of the page.
+
+    It is NOT in <script id="yt-initial-data"> and NOT in `var ytInitialData =`.
+    YouTube assigns it inside an anonymous nonce script, so locate the
+    assignment and brace-match to the closing bracket. Regex-to-`;</script>`
+    returns nothing.
+    """
+    if not html:
+        return None
+    for m in re.finditer(r"ytInitialData['\"]?\]?\s*=\s*(\{)", html):
+        start = m.start(1)
+        depth, i, in_str, esc = 0, start, False, False
+        while i < len(html):
+            c = html[i]
+            if in_str:
+                if esc:
+                    esc = False
+                elif c == "\\":
+                    esc = True
+                elif c == '"':
+                    in_str = False
+            else:
+                if c == '"':
+                    in_str = True
+                elif c == "{":
+                    depth += 1
+                elif c == "}":
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            return json.loads(html[start:i + 1])
+                        except Exception:
+                            break
+            i += 1
+    return None
+
+
+def harvest_videos(node, out=None):
+    """Collect videos from BOTH renderer formats.
+
+    Channel pages now use `lockupViewModel`; `videoRenderer` is the legacy
+    shape still seen elsewhere. Handle both or you get zero results.
+    """
+    if out is None:
+        out = []
+    if isinstance(node, dict):
+        lockup = node.get("lockupViewModel")
+        if isinstance(lockup, dict):
+            video_id = lockup.get("contentId")
+            meta = (lockup.get("metadata") or {}).get("lockupMetadataViewModel") or {}
+            title = (meta.get("title") or {}).get("content")
+            rows = []
+            content_meta = (meta.get("metadata") or {}).get("contentMetadataViewModel") or {}
+            for row in content_meta.get("metadataRows", []):
+                for part in row.get("metadataParts", []):
+                    text = (part.get("text") or {}).get("content")
+                    if text:
+                        rows.append(text)
+            if video_id and title:
+                out.append({"videoId": video_id, "title": title, "meta": rows})
+
+        legacy = node.get("videoRenderer")
+        if isinstance(legacy, dict):
+            video_id = legacy.get("videoId")
+            title_obj = legacy.get("title") or {}
+            title = "".join(r.get("text", "") for r in title_obj.get("runs", [])) or title_obj.get("simpleText")
+            if video_id and title:
+                rows = [
+                    (legacy.get("viewCountText") or {}).get("simpleText"),
+                    (legacy.get("publishedTimeText") or {}).get("simpleText"),
+                ]
+                out.append({"videoId": video_id, "title": title, "meta": [r for r in rows if r]})
+
+        for value in node.values():
+            harvest_videos(value, out)
+    elif isinstance(node, list):
+        for value in node:
+            harvest_videos(value, out)
+    return out
+
+
+def scrape_channel(handle, max_age_days=60):
+    """Return review videos for one channel. Never raises."""
+    html = _fetch(f"https://www.youtube.com/{handle}/videos")
+    data = extract_initial_data(html)
+    if not data:
+        return []
+
+    reviews, seen = [], set()
+    for video in harvest_videos(data):
+        if video["videoId"] in seen:
+            continue
+        seen.add(video["videoId"])
+
+        film = film_title_from_review(video["title"])
+        if not film:
+            continue
+
+        meta_text = " | ".join(video["meta"])
+        age_days = parse_relative_date(meta_text)
+        if age_days is not None and age_days > max_age_days:
+            continue
+
+        reviews.append({
+            "reviewer": handle,
+            "film": film,
+            "filmKey": normalize_title(film),
+            "videoId": video["videoId"],
+            "videoTitle": video["title"],
+            "url": f"https://www.youtube.com/watch?v={video['videoId']}",
+            "views": parse_view_count(meta_text),
+            "ageDays": age_days,
+        })
+    return reviews
