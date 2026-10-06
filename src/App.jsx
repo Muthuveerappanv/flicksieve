@@ -140,6 +140,8 @@ export default function App() {
       }
     }
     bootstrap();
+    // Mount-only load; `noteCorruptFiles` is stable enough for a one-shot call.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Apply theme to document element (immediate, not debounced)
