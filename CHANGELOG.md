@@ -2,6 +2,21 @@
 
 All notable changes to FlickSieve are documented here.
 
+## [Unreleased]
+
+### Fixed
+- Desktop app: scraper commands run off the main thread with timeouts (45s for
+  single-title lookups, 300s for discovery) and kill the child process on
+  timeout, so a slow or hung site no longer freezes the window.
+- Data folder writes are atomic (temp file + rename) and keep a `.bak` of the
+  previous version, in both the Tauri backend and the dev server.
+- A corrupt or wrong-shaped data file no longer aborts startup or gets
+  overwritten by seed data: it is copied to `<name>.corrupt-<timestamp>`, a toast
+  explains, and autosave is paused for that file.
+
+### Security
+- Set a Content-Security-Policy for the packaged app (was `null`).
+
 ## [0.2.0] - 2026-09-06
 
 ### Added

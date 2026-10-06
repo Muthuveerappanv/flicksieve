@@ -44,52 +44,61 @@ function useDebouncedEffect(effect, deps, delay = 500) {
  * Loads shows / reviewers / watchlist / history / theme from the data folder,
  * seeding each file from `fallbacks` when it does not yet exist. Shared by the
  * initial mount load and the data-folder migration handler.
+ *
+ * Each file is parsed independently. A file that exists but can't be parsed (or
+ * has the wrong shape) is copied to `<name>.corrupt-<timestamp>` and reported in
+ * the returned list so the caller can withhold autosave for it — otherwise the
+ * seed data in state would overwrite the user's real (damaged) file.
+ *
+ * @returns {Promise<string[]>} filenames that were found corrupt
  */
 async function loadAll(fallbacks, { setShows, setReviewers, setWatchlist, setWatchedHistory, setTheme }) {
-  const showsContent = await loadDataFile('shows.json');
-  if (showsContent) {
-    const parsed = JSON.parse(showsContent);
-    if (Array.isArray(parsed)) setShows(parsed);
-  } else {
-    await saveDataFile('shows.json', JSON.stringify(fallbacks.shows, null, 2));
-  }
+  const corrupt = [];
 
-  const reviewersContent = await loadDataFile('reviewers.json');
-  if (reviewersContent) {
-    const parsed = JSON.parse(reviewersContent);
-    if (Array.isArray(parsed)) setReviewers(migrateReviewers(parsed));
-  } else {
-    await saveDataFile('reviewers.json', JSON.stringify(fallbacks.reviewers, null, 2));
-  }
+  const loadFile = async (filename, fallback, { validate, apply }) => {
+    const content = await loadDataFile(filename);
+    if (!content) {
+      await saveDataFile(filename, JSON.stringify(fallback, null, 2));
+      return;
+    }
+    try {
+      const parsed = JSON.parse(content);
+      if (!validate(parsed)) throw new Error('unexpected shape');
+      apply(parsed);
+    } catch (err) {
+      console.error(`Could not read ${filename}:`, err);
+      corrupt.push(filename);
+      try {
+        await saveDataFile(`${filename}.corrupt-${Date.now()}`, content);
+      } catch (saveErr) {
+        console.error(`Could not quarantine ${filename}:`, saveErr);
+      }
+    }
+  };
 
-  const watchlistContent = await loadDataFile('watchlist.json');
-  if (watchlistContent) {
-    const parsed = JSON.parse(watchlistContent);
-    if (Array.isArray(parsed)) setWatchlist(parsed);
-  } else {
-    await saveDataFile('watchlist.json', JSON.stringify(fallbacks.watchlist, null, 2));
-  }
+  await loadFile('shows.json', fallbacks.shows, { validate: Array.isArray, apply: setShows });
+  await loadFile('reviewers.json', fallbacks.reviewers, {
+    validate: Array.isArray,
+    apply: (v) => setReviewers(migrateReviewers(v)),
+  });
+  await loadFile('watchlist.json', fallbacks.watchlist, { validate: Array.isArray, apply: setWatchlist });
+  await loadFile('history.json', fallbacks.watchedHistory, { validate: Array.isArray, apply: setWatchedHistory });
 
-  const historyContent = await loadDataFile('history.json');
-  if (historyContent) {
-    const parsed = JSON.parse(historyContent);
-    if (Array.isArray(parsed)) setWatchedHistory(parsed);
-  } else {
-    await saveDataFile('history.json', JSON.stringify(fallbacks.watchedHistory, null, 2));
-  }
-
+  // theme.json may hold a bare string written by an older build, so it isn't strict JSON.
   const themeContent = await loadDataFile('theme.json');
   if (themeContent) {
     let t = themeContent;
     try {
       t = JSON.parse(themeContent);
     } catch (e) {
-      // theme.json may hold a bare string written by an older build
+      // bare string — use as-is
     }
-    if (t) setTheme(t);
+    if (typeof t === 'string' && t) setTheme(t);
   } else {
     await saveDataFile('theme.json', JSON.stringify(fallbacks.theme, null, 2));
   }
+
+  return corrupt;
 }
 
 export default function App() {
@@ -103,6 +112,15 @@ export default function App() {
   const [theme, setTheme] = useState('amethyst');
   const [dataFolder, setDataFolderState] = useState('');
   const [isLoadingData, setIsLoadingData] = useState(true);
+  // Files that failed to load; autosave skips them so state never clobbers the damaged originals.
+  const blockedFilesRef = useRef(new Set());
+
+  const noteCorruptFiles = useCallback((files) => {
+    blockedFilesRef.current = new Set(files);
+    if (files.length > 0) {
+      triggerToast(`Couldn't read ${files.join(', ')}. A copy was kept as .corrupt-*; autosave is paused for it.`);
+    }
+  }, [triggerToast]);
 
   // Load data on mount
   useEffect(() => {
@@ -111,10 +129,10 @@ export default function App() {
         setIsLoadingData(true);
         const folder = await getDataFolder();
         setDataFolderState(folder);
-        await loadAll(
+        noteCorruptFiles(await loadAll(
           { shows: initialShows, reviewers: initialReviewers, watchlist: [], watchedHistory: [], theme: 'amethyst' },
           { setShows, setReviewers, setWatchlist, setWatchedHistory, setTheme }
-        );
+        ));
       } catch (err) {
         console.error("Error loading FlickSieve data:", err);
       } finally {
@@ -135,25 +153,25 @@ export default function App() {
 
   // Sync state changes to system files once loaded (debounced ~500ms)
   useDebouncedEffect(() => {
-    if (isLoadingData) return;
+    if (isLoadingData || blockedFilesRef.current.has('shows.json')) return;
     saveDataFile('shows.json', JSON.stringify(shows, null, 2))
       .catch(e => console.error("Error saving shows:", e));
   }, [shows, isLoadingData]);
 
   useDebouncedEffect(() => {
-    if (isLoadingData) return;
+    if (isLoadingData || blockedFilesRef.current.has('reviewers.json')) return;
     saveDataFile('reviewers.json', JSON.stringify(reviewers, null, 2))
       .catch(e => console.error("Error saving reviewers:", e));
   }, [reviewers, isLoadingData]);
 
   useDebouncedEffect(() => {
-    if (isLoadingData) return;
+    if (isLoadingData || blockedFilesRef.current.has('watchlist.json')) return;
     saveDataFile('watchlist.json', JSON.stringify(watchlist, null, 2))
       .catch(e => console.error("Error saving watchlist:", e));
   }, [watchlist, isLoadingData]);
 
   useDebouncedEffect(() => {
-    if (isLoadingData) return;
+    if (isLoadingData || blockedFilesRef.current.has('history.json')) return;
     saveDataFile('history.json', JSON.stringify(watchedHistory, null, 2))
       .catch(e => console.error("Error saving history:", e));
   }, [watchedHistory, isLoadingData]);
@@ -169,10 +187,10 @@ export default function App() {
       await setDataFolder(newFolder);
       setDataFolderState(newFolder);
       triggerToast(`Data folder updated to: ${newFolder}`);
-      await loadAll(
+      noteCorruptFiles(await loadAll(
         { shows, reviewers, watchlist, watchedHistory, theme },
         { setShows, setReviewers, setWatchlist, setWatchedHistory, setTheme }
-      );
+      ));
     } catch (err) {
       console.error("Error changing/migrating data folder:", err);
       alert(`Failed to update data folder: ${err.message}`);

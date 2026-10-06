@@ -35,6 +35,25 @@ function expandTilde(filepath) {
   return filepath;
 }
 
+/**
+ * Write via a temp file + rename so a crash mid-write can't truncate the user's
+ * data, keeping the previous version as `<file>.bak` (mirrors the Tauri backend).
+ */
+function atomicWriteSync(filePath, content) {
+  const tmp = `${filePath}.tmp`;
+  const fd = fs.openSync(tmp, 'w');
+  try {
+    fs.writeSync(fd, content, null, 'utf-8');
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+  if (fs.existsSync(filePath)) {
+    try { fs.copyFileSync(filePath, `${filePath}.bak`); } catch { /* best effort */ }
+  }
+  fs.renameSync(tmp, filePath);
+}
+
 const resolveConfigPath = () => {
   return path.join(os.homedir(), '.flicksieve', 'config.json');
 };
@@ -129,7 +148,7 @@ export function devApiPlugin() {
             req.on('end', () => {
               try {
                 fs.mkdirSync(folder, { recursive: true });
-                fs.writeFileSync(filePath, body, 'utf-8');
+                atomicWriteSync(filePath, body);
                 res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify({ success: true }));
               } catch (e) {

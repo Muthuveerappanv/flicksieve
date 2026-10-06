@@ -1,5 +1,7 @@
+use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 use tauri::Manager;
 
 /// Resolves the paths for the Python executable and the scraper script.
@@ -69,13 +71,20 @@ fn resolve_paths(app: &tauri::AppHandle, script_name: &str) -> Result<(PathBuf, 
     Ok((python_exe, bundled_script))
 }
 
+/// Single-title lookups (Letterboxd / RT) should answer quickly.
+const LOOKUP_TIMEOUT: Duration = Duration::from_secs(45);
+/// Discovery crawls fan out across many pages; match the dev server's 300s cap.
+const DISCOVERY_TIMEOUT: Duration = Duration::from_secs(300);
+
 /// Executes a Python script with the given arguments and returns its stdout.
+/// The child is killed if it has not exited within `timeout`.
 fn execute_python_script(
-    app: tauri::AppHandle,
+    app: &tauri::AppHandle,
     script_name: &str,
-    args: Vec<&str>,
+    args: &[&str],
+    timeout: Duration,
 ) -> Result<String, String> {
-    let (python_exe, script_path) = resolve_paths(&app, script_name)?;
+    let (python_exe, script_path) = resolve_paths(app, script_name)?;
 
     if !script_path.exists() {
         return Err(format!(
@@ -84,26 +93,73 @@ fn execute_python_script(
         ));
     }
 
-    let mut command = Command::new(python_exe);
-    command.arg(script_path);
-    for arg in args {
-        command.arg(arg);
-    }
-
-    let output = command
-        .output()
+    let mut child = Command::new(python_exe)
+        .arg(script_path)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|e| format!("Failed to run Python command: {}", e))?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!(
-            "Scraper script failed with status code {}.\nStderr: {}",
-            output.status, stderr
-        ));
-    }
+    // Drain both pipes on their own threads so a chatty child can't block on a full pipe.
+    let mut stdout_pipe = child.stdout.take().ok_or("Failed to capture stdout")?;
+    let mut stderr_pipe = child.stderr.take().ok_or("Failed to capture stderr")?;
+    let out_thread = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = stdout_pipe.read_to_end(&mut buf);
+        buf
+    });
+    let err_thread = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = stderr_pipe.read_to_end(&mut buf);
+        buf
+    });
 
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(stdout)
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait().map_err(|e| format!("Failed to wait on Python command: {}", e))? {
+            Some(status) => break Some(status),
+            None if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+            None => std::thread::sleep(Duration::from_millis(50)),
+        }
+    };
+
+    let stdout = out_thread.join().unwrap_or_default();
+    let stderr = err_thread.join().unwrap_or_default();
+
+    match status {
+        None => Err(format!(
+            "Scraper {} timed out after {}s",
+            script_name,
+            timeout.as_secs()
+        )),
+        Some(status) if !status.success() => Err(format!(
+            "Scraper script failed with status code {}.\nStderr: {}",
+            status,
+            String::from_utf8_lossy(&stderr)
+        )),
+        Some(_) => Ok(String::from_utf8_lossy(&stdout).to_string()),
+    }
+}
+
+/// Runs a scraper on the blocking thread pool so a slow crawl never stalls the
+/// main thread (sync Tauri commands run there and would freeze the window).
+async fn run_scraper(
+    app: tauri::AppHandle,
+    script_name: &'static str,
+    args: Vec<String>,
+    timeout: Duration,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        execute_python_script(&app, script_name, &refs, timeout)
+    })
+    .await
+    .map_err(|e| format!("Scraper task failed: {}", e))?
 }
 
 fn get_home_dir(app: Option<&tauri::AppHandle>) -> PathBuf {
@@ -153,6 +209,27 @@ fn resolve_data_folder(app: Option<&tauri::AppHandle>) -> PathBuf {
     home.join(".flicksieve")
 }
 
+/// Writes `bytes` to `path` without ever leaving a truncated file behind:
+/// write + fsync a sibling temp file, keep the previous version as `<name>.bak`,
+/// then rename the temp file into place (atomic on the same filesystem).
+fn atomic_write(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let tmp = path.with_file_name(format!("{}.tmp", name));
+    {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+    }
+    if path.exists() {
+        // Best effort: a failed backup must not block saving the new data.
+        let _ = std::fs::copy(path, path.with_file_name(format!("{}.bak", name)));
+    }
+    std::fs::rename(&tmp, path)
+}
+
 #[tauri::command]
 fn get_data_folder(app: tauri::AppHandle) -> String {
     let folder = resolve_data_folder(Some(&app));
@@ -180,7 +257,7 @@ fn set_data_folder(app: tauri::AppHandle, path: String) -> Result<(), String> {
 
     let config_json = serde_json::Value::Object(config_val);
     let content = serde_json::to_string_pretty(&config_json).map_err(|e| e.to_string())?;
-    std::fs::write(&config_path, content).map_err(|e| format!("Failed to write config: {}", e))?;
+    atomic_write(&config_path, content.as_bytes()).map_err(|e| format!("Failed to write config: {}", e))?;
 
     Ok(())
 }
@@ -206,44 +283,40 @@ fn save_data_file(app: tauri::AppHandle, filename: String, content: String) -> R
     let folder = resolve_data_folder(Some(&app));
     std::fs::create_dir_all(&folder)
         .map_err(|e| format!("Failed to create data directory: {}", e))?;
-    let file_path = folder.join(filename);
-    std::fs::write(&file_path, content).map_err(|e| format!("Failed to write file: {}", e))
+    atomic_write(&folder.join(filename), content.as_bytes())
+        .map_err(|e| format!("Failed to write file: {}", e))
 }
 
 #[tauri::command]
-fn run_letterboxd_scraper(
+async fn run_letterboxd_scraper(
     app: tauri::AppHandle,
     query: String,
     year: String,
     imdb_id: String,
     is_tv: Option<bool>,
 ) -> Result<String, String> {
-    let is_tv_str = if is_tv.unwrap_or(false) { "true" } else { "false" };
-    execute_python_script(app, "fetch_letterboxd.py", vec![&query, &year, &imdb_id, is_tv_str])
+    let is_tv_str = if is_tv.unwrap_or(false) { "true" } else { "false" }.to_string();
+    run_scraper(app, "fetch_letterboxd.py", vec![query, year, imdb_id, is_tv_str], LOOKUP_TIMEOUT).await
 }
 
 #[tauri::command]
-fn run_rottentomatoes_scraper(
+async fn run_rottentomatoes_scraper(
     app: tauri::AppHandle,
     query: String,
     year: String,
     is_tv: Option<bool>,
 ) -> Result<String, String> {
-    let is_tv_str = if is_tv.unwrap_or(false) { "true" } else { "false" };
-    execute_python_script(
-        app,
-        "fetch_rottentomatoes.py",
-        vec![&query, &year, is_tv_str],
-    )
+    let is_tv_str = if is_tv.unwrap_or(false) { "true" } else { "false" }.to_string();
+    run_scraper(app, "fetch_rottentomatoes.py", vec![query, year, is_tv_str], LOOKUP_TIMEOUT).await
 }
 
 #[tauri::command]
-fn run_91mobiles_scraper(app: tauri::AppHandle) -> Result<String, String> {
-    execute_python_script(app, "scrape_91mobiles.py", vec![])
+async fn run_91mobiles_scraper(app: tauri::AppHandle) -> Result<String, String> {
+    run_scraper(app, "scrape_91mobiles.py", vec![], LOOKUP_TIMEOUT).await
 }
 
 #[tauri::command]
-fn run_discover_at_home(
+async fn run_discover_at_home(
     app: tauri::AppHandle,
     days: String,
     min_audience: String,
@@ -251,11 +324,11 @@ fn run_discover_at_home(
     media_type: Option<String>,
 ) -> Result<String, String> {
     let media_str = media_type.unwrap_or_else(|| "movie".to_string());
-    execute_python_script(app, "discover_at_home.py", vec![&days, &min_audience, &sort, &media_str])
+    run_scraper(app, "discover_at_home.py", vec![days, min_audience, sort, media_str], DISCOVERY_TIMEOUT).await
 }
 
 #[tauri::command]
-fn run_discover_indian(
+async fn run_discover_indian(
     app: tauri::AppHandle,
     window_days: String,
     languages: String,
@@ -263,11 +336,13 @@ fn run_discover_indian(
     min_critics: String,
     include_youtube: String,
 ) -> Result<String, String> {
-    execute_python_script(
+    run_scraper(
         app,
         "discover_indian.py",
-        vec![&window_days, &languages, &min_rating, &min_critics, &include_youtube],
+        vec![window_days, languages, min_rating, min_critics, include_youtube],
+        DISCOVERY_TIMEOUT,
     )
+    .await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -426,5 +501,20 @@ mod tests {
 
         // Clean up env var
         std::env::remove_var("FLICKSIEVE_TEST_DIR");
+    }
+
+    #[test]
+    fn test_atomic_write_keeps_backup_and_no_tmp() {
+        let dir = std::env::temp_dir().join(format!("flicksieve_atomic_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("shows.json");
+
+        atomic_write(&file, b"[1]").unwrap();
+        atomic_write(&file, b"[1,2]").unwrap();
+
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "[1,2]");
+        assert_eq!(std::fs::read_to_string(dir.join("shows.json.bak")).unwrap(), "[1]");
+        assert!(!dir.join("shows.json.tmp").exists());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
